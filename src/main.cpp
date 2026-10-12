@@ -567,14 +567,12 @@ private:
   // Iconos de botones dentro del juego para el mando en uso.
   std::vector<uint8_t> GameButtonPatches() const
   {
-    if (!m_cfg.game_prompts)
-      return {};
-    switch (CurrentStyle())
-    {
-      case PromptStyle::Keyboard: return BuildGameButtonPatches(GameButtonStyle::Keyboard, m_cfg);
-      case PromptStyle::Xbox: return BuildGameButtonPatches(GameButtonStyle::Xbox, m_cfg);
-      default: return {};
-    }
+    GameButtonStyle style = GameButtonStyle::Original;
+    if (m_cfg.game_prompts && CurrentStyle() == PromptStyle::Keyboard)
+      style = GameButtonStyle::Keyboard;
+    else if (m_cfg.game_prompts && CurrentStyle() == PromptStyle::Xbox)
+      style = GameButtonStyle::Xbox;
+    return BuildGameButtonPatches(style, m_cfg);
   }
   void Navigate(int dy, int dx);
   void NavigateImpl(int dy, int dx);
@@ -3508,6 +3506,7 @@ int App::Run(int argc, char** argv)
     {
       if (const char* st = std::getenv("TENSHU_TEST_STYLE"))
         m_cfg.prompt_style = st;
+      m_cfg.hardcore = std::getenv("TENSHU_TEST_HARDCORE") != nullptr; // pruebas: modo normal por defecto
       StartGame(screenshot_screen == "continue");
       if (m_modal == Modal::Dialog)
         SDL_Log("Error al arrancar: %s", m_dialog.c_str());
@@ -3556,7 +3555,8 @@ int App::Run(int argc, char** argv)
         Update(static_cast<float>((now - last) / freq));
         last = now;
         Render();
-        if (el > (shot + 1) * 5.0)
+        const double every = std::getenv("TENSHU_TEST_SHOT_EVERY") ? std::atof(std::getenv("TENSHU_TEST_SHOT_EVERY")) : 5.0;
+        if (el > (shot + 1) * every)
         {
           shot++;
           SDL_Log("t=%.0fs frames_emu=%llu fps_obj=%.2f frame=%dx%d", el,

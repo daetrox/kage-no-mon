@@ -74,7 +74,13 @@ private:
   void* m_lib = nullptr;
   std::vector<uint8_t> m_button_patches;
   // Extensiones de Kage no Mon en el núcleo (opcionales).
-  void (*m_kage_watch)(uint64_t, uint64_t, uint32_t, uint32_t) = nullptr;
+  void (*m_kage_watch)(uint64_t, uint64_t, uint32_t, uint32_t, bool) = nullptr;
+  bool (*m_kage_set_original)(uint64_t, uint64_t, uint32_t, uint32_t, const uint16_t*) = nullptr;
+  size_t (*m_kage_get_original)(uint64_t, uint64_t, uint32_t*, uint32_t*, uint16_t*, size_t) = nullptr;
+  // Copia de las texturas originales con iconos (salen del disco del usuario), para poder volver a
+  // ellas aunque la partida empiece desde un estado guardado con otros iconos.
+  void LoadButtonOriginals();
+  void SaveButtonOriginals();
   bool (*m_kage_set_patches)(const void*, size_t) = nullptr;
   void (*m_kage_log)(const char*) = nullptr;
   bool (*m_kage_dump)(const char*) = nullptr;

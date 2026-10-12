@@ -383,6 +383,8 @@ bool Emulator::LoadCore(std::string* error)
   m_kage_log = reinterpret_cast<decltype(m_kage_log)>(dlsym(m_lib, "kage_vram_log"));
   m_kage_dump = reinterpret_cast<decltype(m_kage_dump)>(dlsym(m_lib, "kage_vram_dump"));
   m_kage_refresh = reinterpret_cast<decltype(m_kage_refresh)>(dlsym(m_lib, "kage_vram_refresh"));
+  m_kage_set_original = reinterpret_cast<decltype(m_kage_set_original)>(dlsym(m_lib, "kage_vram_set_original"));
+  m_kage_get_original = reinterpret_cast<decltype(m_kage_get_original)>(dlsym(m_lib, "kage_vram_get_original"));
   return true;
 }
 
@@ -484,7 +486,8 @@ bool Emulator::Start(const Config& cfg, SDL_Window* window, SDL_GLContext ui_con
   if (m_kage_watch && m_kage_set_patches)
   {
     for (const GameUpload& u : GameButtonUploads())
-      m_kage_watch(u.hash_low, u.hash_high, u.x, u.y);
+      m_kage_watch(u.hash_low, u.hash_high, u.x, u.y, u.fixed);
+    LoadButtonOriginals();
     m_kage_set_patches(m_button_patches.data(), m_button_patches.size());
   }
   if (m_kage_log)
@@ -548,6 +551,7 @@ void Emulator::Stop()
 {
   if (!m_running)
     return;
+  SaveButtonOriginals();
 
   if (m_audio)
   {
@@ -789,4 +793,60 @@ void Emulator::SetButtonPatches(std::vector<uint8_t> patches)
 bool Emulator::DumpVram(const std::string& path)
 {
   return m_running && m_kage_dump && m_kage_dump(path.c_str());
+}
+
+namespace {
+std::string OriginalPath(const GameUpload& u)
+{
+  char name[64];
+  std::snprintf(name, sizeof(name), "/%016llx%016llx.bin", static_cast<unsigned long long>(u.hash_high),
+                static_cast<unsigned long long>(u.hash_low));
+  return Paths::DataDir() + "/texturas" + name;
+}
+} // namespace
+
+void Emulator::LoadButtonOriginals()
+{
+  if (!m_kage_set_original)
+    return;
+  for (const GameUpload& u : GameButtonUploads())
+  {
+    FILE* f = std::fopen(OriginalPath(u).c_str(), "rb");
+    if (!f)
+      continue;
+    uint32_t wh[2] = {};
+    if (std::fread(wh, 4, 2, f) == 2 && wh[0] && wh[1] && wh[0] * wh[1] <= 1024 * 512)
+    {
+      std::vector<uint16_t> data(static_cast<size_t>(wh[0]) * wh[1]);
+      if (std::fread(data.data(), 2, data.size(), f) == data.size())
+        m_kage_set_original(u.hash_low, u.hash_high, wh[0], wh[1], data.data());
+    }
+    std::fclose(f);
+  }
+}
+
+void Emulator::SaveButtonOriginals()
+{
+  if (!m_kage_get_original)
+    return;
+  for (const GameUpload& u : GameButtonUploads())
+  {
+    const std::string path = OriginalPath(u);
+    if (Paths::FileExists(path))
+      continue;
+    uint32_t w = 0, h = 0;
+    const size_t n = m_kage_get_original(u.hash_low, u.hash_high, &w, &h, nullptr, 0);
+    if (!n)
+      continue;
+    std::vector<uint16_t> data(n);
+    m_kage_get_original(u.hash_low, u.hash_high, &w, &h, data.data(), n);
+    Paths::MakeDirs(Paths::DataDir() + "/texturas");
+    if (FILE* f = std::fopen(path.c_str(), "wb"))
+    {
+      const uint32_t wh[2] = {w, h};
+      std::fwrite(wh, 4, 2, f);
+      std::fwrite(data.data(), 2, n, f);
+      std::fclose(f);
+    }
+  }
 }
