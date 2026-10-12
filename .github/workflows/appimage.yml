@@ -1,5 +1,5 @@
 # Compila el launcher y genera el AppImage en GitHub Actions.
-# Para activarlo, este archivo debe estar en .github/workflows/appimage.yml (ver README).
+# Se ejecuta en cada cambio; con una etiqueta vX.Y publica una Release con el AppImage.
 name: AppImage
 
 on:

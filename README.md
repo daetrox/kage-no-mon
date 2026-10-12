@@ -44,9 +44,9 @@ y ejecútalo (`chmod +x Tenshu2-*.AppImage && ./Tenshu2-*.AppImage`).
 
 ### Compilación automática
 
-`packaging/appimage.yml` es el flujo de GitHub Actions que compila todo y genera el AppImage
-(como artefacto en cada cambio y como Release al crear una etiqueta `vX.Y`). Para activarlo,
-cópialo a `.github/workflows/appimage.yml`. En local: `./build.sh && packaging/make_appimage.sh`.
+`.github/workflows/appimage.yml` compila todo en GitHub Actions y genera el AppImage (como
+artefacto en cada cambio y como Release al crear una etiqueta `vX.Y`).
+En local: `./build.sh && packaging/make_appimage.sh`.
 
 ## Usar
 
