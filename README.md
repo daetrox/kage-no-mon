@@ -49,6 +49,9 @@ ni mensajes extraños.
 | 🖥️ **Pantalla panorámica 16:9** | Con un parche real del juego, no un estiramiento: más campo de visión. |
 | ✨ **Gráficos mejorados** | Hasta 5× la resolución original, texturas suavizadas (xBR) y polígonos sin temblores. |
 | 🎮 **Teclado, Xbox o PlayStation** | Los iconos de los botones cambian solos según lo que uses. |
+| ⌨️ **Controles a tu gusto** | Reasigna cada botón del teclado y del mando por separado, con restauración por defecto. |
+| 🇪🇸 **Logros en español** | Las descripciones se traducen en tu equipo, con los nombres oficiales de las misiones. |
+| 📜 **Créditos** | Todas las personas y proyectos que hacen posible el launcher, con sus licencias. |
 | 💾 **Guardado rápido** | Al salir se guarda tu partida y la retomas con **CONTINUAR**. |
 | 📦 **Un solo archivo** | AppImage: funciona en casi cualquier distribución de Linux sin instalar nada. |
 
