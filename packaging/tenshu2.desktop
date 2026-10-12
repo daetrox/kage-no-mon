@@ -1,0 +1,9 @@
+#!/usr/bin/env xdg-open
+[Desktop Entry]
+Type=Application
+Name=Tenshu 2
+Comment=Lanzador del juego (núcleo SwanStation)
+Exec=sh -c 'exec "$(dirname "$(readlink -f "%k")")/tenshu2"'
+Terminal=false
+Categories=Game;
+StartupWMClass=tenshu2
