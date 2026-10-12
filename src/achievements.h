@@ -22,6 +22,7 @@ struct Achievement
   std::string author;  // autor del logro en RetroAchievements
   int points = 0;
   bool unlocked = false;
+  bool hardcore = false;   // desbloqueado en modo hardcore
   int64_t unlock_time = 0; // epoch
   Texture icon;            // insignia cargada bajo demanda
   bool icon_tried = false;
@@ -51,6 +52,7 @@ public:
 
   std::vector<Achievement>& List() { return m_list; }
   int EarnedCount() const;
+  int HardcoreCount() const;
   int EarnedPoints() const;
   int TotalPoints() const;
   void LoadIcon(Achievement& a, Renderer& r);
@@ -59,7 +61,9 @@ public:
   std::vector<std::string> Authors() const;
 
   // Sesión de juego.
-  void BeginSession();
+  // En hardcore también se vigilan los logros conseguidos sólo en modo normal, para mejorarlos.
+  void BeginSession(bool hardcore);
+  bool SessionHardcore() const { return m_hardcore; }
   void EndSession();
   void DoFrame(const uint8_t* ram, size_t ram_size);
   // Logros recién desbloqueados desde la última llamada.
@@ -95,6 +99,7 @@ private:
 
   // Ejecución.
   void* m_runtime = nullptr; // rc_runtime_t*
+  bool m_hardcore = false;
   const uint8_t* m_ram = nullptr;
   size_t m_ram_size = 0;
   std::vector<uint32_t> m_new_unlocks;

@@ -311,6 +311,7 @@ enum OptRow
   OPT_BIOS,
   OPT_BIOS_LOAD,
   OPT_FASTBOOT,
+  OPT_HARDCORE,
   OPT_RENDERER,
   OPT_SCALE,
   OPT_TEXFILTER,
@@ -338,7 +339,7 @@ constexpr int kCheatsCategory = 4; // abre la pantalla de trucos en lugar de una
 const char* const kOptCategories[kOptCategoryCount] = {"ISO Y BIOS", "GRÁFICOS", "SONIDO", "CONTROLES", "TRUCOS"};
 const char* const kOptKanji[kOptCategoryCount] = {"盤", "絵", "音", "操", "術"};
 const char* const kOptCategoryHelp[kOptCategoryCount] = {
-  "Imagen del disco, BIOS de la consola y arranque.",
+  "Imagen del disco, BIOS de la consola, arranque y modo hardcore.",
   "Resolución, filtros, aspecto de la pantalla y pantalla completa.",
   "Volumen del juego, de la música y de los efectos.",
   "Iconos de botones, personalización y esquema de controles.",
@@ -348,7 +349,7 @@ const char* const kOptCategoryHelp[kOptCategoryCount] = {
 const std::vector<int>& OptPageRows(int page)
 {
   static const std::vector<int> pages[kOptCategoryCount] = {
-    {OPT_GAME, OPT_BIOS, OPT_BIOS_LOAD, OPT_FASTBOOT, OPT_BACK},
+    {OPT_GAME, OPT_BIOS, OPT_BIOS_LOAD, OPT_FASTBOOT, OPT_HARDCORE, OPT_BACK},
     {OPT_RENDERER, OPT_SCALE, OPT_TEXFILTER, OPT_PGXP, OPT_WIDESCREEN, OPT_SIDEART, OPT_SMOOTH, OPT_FULLSCREEN,
      OPT_BACK},
     {OPT_VOLUME, OPT_MUSIC, OPT_SFX, OPT_BACK},
@@ -537,6 +538,19 @@ private:
   void SetGamePath(const std::string& path);
   std::string StatePath() const { return Paths::StatesDir() + "/" + StemName(m_cfg.game_path) + ".state"; }
   bool HasResumeState() const { return Paths::FileExists(StatePath()); }
+  bool HasSonyBios() const
+  {
+    return !m_cfg.bios_file.empty() && Paths::FileExists(Paths::BiosDir() + "/" + m_cfg.bios_file);
+  }
+  // En hardcore no se pueden usar estados guardados (norma de RetroAchievements).
+  bool StatesBlocked()
+  {
+    if (!m_hardcore_session)
+      return false;
+    m_audio.Play(Sfx::Cancel);
+    Toast("No disponible en modo hardcore");
+    return true;
+  }
   void StartLogin();
   bool IntroActive() const { return m_intro_t < kIntroLen; }
 
@@ -616,6 +630,7 @@ private:
   int m_cheat_sel = 0;
   float m_cheat_scroll = 0;
   bool m_cheats_active = false;    // la partida en curso usa trucos: logros en pausa
+  bool m_hardcore_session = false; // la partida en curso es hardcore: sin estados guardados
   float m_credits_scroll = 0, m_credits_target = 0;
   float m_credits_height = 0; // alto total del texto de créditos (px de la ilustración)
   int m_remap_device = 0;   // 0 teclado, 1 mando
@@ -825,7 +840,7 @@ void App::ActivateMenu(int index)
   switch (index)
   {
     case 0:
-      if (HasResumeState())
+      if (HasResumeState() && !m_cfg.hardcore)
       {
         m_modal = Modal::PlayChoice;
         m_choice_sel = 0;
@@ -870,6 +885,17 @@ void App::StartGame(bool resume)
     return;
   }
 
+  // Hardcore: sólo con la BIOS original de la consola y siempre desde el arranque.
+  if (m_cfg.hardcore && !HasSonyBios())
+  {
+    ShowDialog("El modo hardcore funciona sólo con la BIOS original de tu PlayStation.\n\nCárgala en OPCIONES · "
+               "ISO y BIOS, o desactiva allí el modo hardcore.");
+    return;
+  }
+  m_hardcore_session = m_cfg.hardcore;
+  if (m_hardcore_session)
+    resume = false;
+
   // Un frame en negro mientras arranca el núcleo.
   m_r.BeginFrame(m_w, m_h, m_time);
   glClearColor(0, 0, 0, 1);
@@ -877,7 +903,7 @@ void App::StartGame(bool resume)
   SDL_GL_SwapWindow(m_window);
 
   m_audio.Play(Sfx::Start);
-  const std::vector<std::string> cheats = ActiveCheatCodes();
+  const std::vector<std::string> cheats = m_hardcore_session ? std::vector<std::string>{} : ActiveCheatCodes();
   m_cheats_active = !cheats.empty();
   m_emu.SetCheats(cheats);
   std::string error;
@@ -898,7 +924,9 @@ void App::StartGame(bool resume)
   }
   else
   {
-    m_ach.BeginSession();
+    m_ach.BeginSession(m_hardcore_session);
+    if (m_hardcore_session)
+      Toast("Modo hardcore: sin estados guardados ni trucos");
   }
   m_emu.on_frame = [this]() {
     size_t n = 0;
@@ -916,7 +944,7 @@ void App::StopGame(bool autosave)
 {
   if (!m_emu.IsRunning())
     return;
-  if (autosave)
+  if (autosave && !m_hardcore_session)
     m_emu.SaveState(StatePath());
   m_emu.on_frame = nullptr;
   m_ach.EndSession();
@@ -936,14 +964,18 @@ void App::ActivatePause(int index)
   {
     case 0: resume(); break;
     case 1:
+      if (StatesBlocked())
+        break;
       Toast(m_emu.SaveState(StatePath()) ? "Partida guardada" : "No se pudo guardar la partida");
       resume();
       break;
     case 2:
+      if (StatesBlocked())
+        break;
       if (m_emu.LoadState(StatePath()))
       {
         if (!m_cheats_active)
-          m_ach.BeginSession(); // reinicia la evaluación tras cambiar la memoria
+          m_ach.BeginSession(false); // reinicia la evaluación tras cambiar la memoria
         Toast("Partida cargada");
       }
       else
@@ -1156,6 +1188,12 @@ void App::OptionChange(int row, int dir)
       m_audio.SetVolumes(m_cfg.music_volume, m_cfg.sfx_volume);
       break;
     case OPT_FASTBOOT: m_cfg.fast_boot = !m_cfg.fast_boot; break;
+    case OPT_HARDCORE:
+      m_cfg.hardcore = !m_cfg.hardcore;
+      if (m_cfg.hardcore && !HasSonyBios())
+        ShowDialog("Modo hardcore activado.\n\nNecesita la BIOS original de tu PlayStation: cárgala con "
+                   "«Cargar BIOS nueva…» y elígela en la fila BIOS.");
+      break;
     case OPT_PROMPTS:
     {
       static const char* styles[] = {"auto", "keyboard", "xbox", "playstation"};
@@ -1729,6 +1767,9 @@ void App::HandleEvent(const SDL_Event& e)
             }
           }
         }
+        else if ((key == SDLK_F5 || key == SDLK_F7) && StatesBlocked())
+        {
+        }
         else if (key == SDLK_F5)
           Toast(m_emu.SaveState(StatePath()) ? "Partida guardada" : "No se pudo guardar");
         else if (key == SDLK_F7)
@@ -1736,7 +1777,7 @@ void App::HandleEvent(const SDL_Event& e)
           if (m_emu.LoadState(StatePath()))
           {
             if (!m_cheats_active)
-              m_ach.BeginSession();
+              m_ach.BeginSession(false);
             Toast("Partida cargada");
           }
           else
@@ -2621,6 +2662,9 @@ void App::RenderOptions()
       }
       case OPT_BIOS_LOAD: return {"Cargar BIOS nueva…", ""};
       case OPT_FASTBOOT: return {"Arranque rápido", yesno(m_cfg.fast_boot), true, true};
+      case OPT_HARDCORE:
+        return {"Modo hardcore",
+                m_cfg.hardcore ? (HasSonyBios() ? "Sí" : "Sí (falta la BIOS original)") : "No", true, true};
       case OPT_RENDERER: return {"Renderizador", hw ? "OpenGL (mejorado)" : "Software (preciso)", true, true};
       case OPT_SCALE: return {"Resolución interna", std::to_string(m_cfg.resolution_scale) + "x", hw, true};
       case OPT_TEXFILTER:
@@ -2719,6 +2763,10 @@ void App::RenderOptions()
       break;
     case OPT_BIOS_LOAD: help = "Copia una BIOS (archivo de 512 KB) a la carpeta bios/ y la deja elegida."; break;
     case OPT_FASTBOOT: help = "Salta la animación de arranque de la consola."; break;
+    case OPT_HARDCORE:
+      help = "Como en la consola: BIOS original, sin estados guardados ni trucos; sólo la tarjeta de memoria. Los "
+             "logros conseguidos así se marcan como hardcore.";
+      break;
     case OPT_RENDERER: help = "OpenGL permite alta resolución. Software es el más fiel al hardware original."; break;
     case OPT_SCALE:
       help = "Resolución de PlayStation multiplicada: 4x ≈ 960p, 5x ≈ 1080p. 3x no se ofrece porque corrompe el texto "
@@ -3107,7 +3155,10 @@ void App::RenderControls()
     DrawGlyph(r.b, IX(c3), IY(y), IS(40), PromptStyle::PlayStation);
     y += 54;
   }
-  m_r.Text(m_r.ui, "F5 guardar · F7 cargar · F11 pantalla completa", IX(c0), IY(y + 14), IS(22), kDim);
+  m_r.Text(m_r.ui,
+           m_cfg.hardcore ? "F11 pantalla completa  ·  modo hardcore: sin F5 / F7"
+                          : "F5 guardar · F7 cargar · F11 pantalla completa",
+           IX(c0), IY(y + 14), IS(22), kDim);
   RenderHints({{PsButton::Back, "Volver"}}, IX(px + pw - 30), IY(py + ph - 64));
 }
 
@@ -3126,7 +3177,9 @@ void App::RenderAchievements()
     const int earned = m_ach.EarnedCount();
     m_r.Text(m_r.ui, Truncate(m_r.ui, m_ach.GameTitle(), IS(26), IS(pw - 420)), IX(px + pw - 40), IY(py + 24), IS(26),
              kGrey, Align::Right);
-    const std::string prog = std::to_string(earned) + " de " + std::to_string(list.size()) + " logros  ·  " +
+    const std::string prog = std::string(m_cfg.hardcore ? "Modo hardcore  ·  " : "") + std::to_string(earned) +
+                             " de " + std::to_string(list.size()) + " logros (" +
+                             std::to_string(m_ach.HardcoreCount()) + " hardcore)  ·  " +
                              std::to_string(m_ach.EarnedPoints()) + " / " + std::to_string(m_ach.TotalPoints()) +
                              " puntos";
     m_r.Text(m_r.ui, prog, IX(px + pw - 40), IY(py + 60), IS(24), kGold, Align::Right);
@@ -3168,7 +3221,7 @@ void App::RenderAchievements()
         char date[32];
         const time_t t = static_cast<time_t>(a.unlock_time);
         std::strftime(date, sizeof(date), "%d/%m/%Y", std::localtime(&t));
-        when = date;
+        when = std::string(a.hardcore ? "Hardcore · " : "") + date;
       }
       m_r.Text(m_r.ui, when, rr.x + rr.w - IS(20), rr.y + IS(44), IS(19), kDim, Align::Right);
     }
@@ -3294,15 +3347,20 @@ void App::RenderPause()
   for (int i = 0; i < kPauseItems; i++)
   {
     const Rect slot = {px + 70, py + 125 + i * 98.0f, 462, 88};
-    DrawMenuButton(slot, labels[i], icons[i], m_sel_anim[i], 34, true);
+    const bool blocked = m_hardcore_session && (i == 1 || i == 2);
+    DrawMenuButton(slot, labels[i], icons[i], m_sel_anim[i], 34, true, blocked ? 0.35f : 1.0f);
     Hot(IR(slot), 2, i, [this, i](float, float) { ActivatePause(i); });
   }
   if (m_cheats_active)
     m_r.Text(m_r.ui, "Logros en pausa: hay trucos activos", IX(px + 70), IY(py + ph - 64), IS(24), kDim);
   else if (m_ach.GetState() == Achievements::State::Ready)
     m_r.Text(m_r.ui,
-             "Logros: " + std::to_string(m_ach.EarnedCount()) + " / " + std::to_string(m_ach.List().size()),
+             std::string(m_hardcore_session ? "MODO HARDCORE  ·  " : "") + "Logros: " +
+               std::to_string(m_hardcore_session ? m_ach.HardcoreCount() : m_ach.EarnedCount()) + " / " +
+               std::to_string(m_ach.List().size()),
              IX(px + 70), IY(py + ph - 64), IS(24), kGold);
+  else if (m_hardcore_session)
+    m_r.Text(m_r.ui, "MODO HARDCORE", IX(px + 70), IY(py + ph - 64), IS(24), kGold);
   RenderHints({{PsButton::Accept, "Aceptar"}, {PsButton::Back, "Reanudar"}}, m_w - IS(30), m_h - IS(60));
 }
 

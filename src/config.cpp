@@ -252,6 +252,7 @@ void Config::Load()
     else if (key == "fast_boot") fast_boot = b;
     else if (key == "prompt_style") prompt_style = val;
     else if (key == "cheats") cheats = val;
+    else if (key == "hardcore") hardcore = b;
     else if (key.rfind("key_", 0) == 0 || key.rfind("pad_", 0) == 0)
     {
       const int idx = std::atoi(key.c_str() + 4);
@@ -294,6 +295,7 @@ void Config::Save() const
   out << "fast_boot=" << fast_boot << "\n";
   out << "prompt_style=" << prompt_style << "\n";
   out << "cheats=" << cheats << "\n";
+  out << "hardcore=" << hardcore << "\n";
   for (int i = 0; i < kPsButtons; i++)
     out << "key_" << i << "=" << key_bind[i] << "\n";
   for (int i = 0; i < kPsButtons; i++)

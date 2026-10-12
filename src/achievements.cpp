@@ -173,16 +173,24 @@ bool Achievements::LoadCache()
 
 void Achievements::LoadUnlocks()
 {
+  // Una línea por logro: "id fecha [h]" (h = conseguido en modo hardcore).
   std::ifstream in(GameDir() + "/unlocks.txt");
-  uint32_t id;
-  int64_t when;
+  std::string line;
   bool stale = false;
-  while (in >> id >> when)
+  while (std::getline(in, line))
   {
+    std::istringstream ls(line);
+    uint32_t id;
+    int64_t when;
+    std::string mode;
+    if (!(ls >> id >> when))
+      continue;
+    ls >> mode;
     if (Achievement* a = Find(id))
     {
       a->unlocked = true;
       a->unlock_time = when;
+      a->hardcore = (mode == "h");
     }
     else
     {
@@ -199,7 +207,7 @@ void Achievements::SaveUnlocks() const
   std::ofstream out(GameDir() + "/unlocks.txt", std::ios::trunc);
   for (const Achievement& a : m_list)
     if (a.unlocked)
-      out << a.id << " " << a.unlock_time << "\n";
+      out << a.id << " " << a.unlock_time << (a.hardcore ? " h" : "") << "\n";
 }
 
 void Achievements::ResetUnlocks()
@@ -207,6 +215,7 @@ void Achievements::ResetUnlocks()
   for (Achievement& a : m_list)
   {
     a.unlocked = false;
+    a.hardcore = false;
     a.unlock_time = 0;
   }
   SaveUnlocks();
@@ -245,6 +254,14 @@ int Achievements::EarnedCount() const
   int n = 0;
   for (const Achievement& a : m_list)
     n += a.unlocked;
+  return n;
+}
+
+int Achievements::HardcoreCount() const
+{
+  int n = 0;
+  for (const Achievement& a : m_list)
+    n += a.hardcore;
   return n;
 }
 
@@ -411,16 +428,17 @@ void Achievements::Poll()
 
 // --- Ejecución ---------------------------------------------------------------------------------
 
-void Achievements::BeginSession()
+void Achievements::BeginSession(bool hardcore)
 {
   EndSession();
+  m_hardcore = hardcore;
   if (m_state != State::Ready)
     return;
   auto* rt = rc_runtime_alloc();
   int active = 0;
   for (const Achievement& a : m_list)
   {
-    if (a.unlocked)
+    if (a.unlocked && (!hardcore || a.hardcore))
       continue;
     if (rc_runtime_activate_achievement(rt, a.id, a.memaddr.c_str(), nullptr, 0) == RC_OK)
       active++;
@@ -488,9 +506,10 @@ void Achievements::LogEvent(int type, uint32_t id)
 void Achievements::Unlock(uint32_t id)
 {
   Achievement* a = Find(id);
-  if (!a || a->unlocked)
+  if (!a || (a->unlocked && (!m_hardcore || a->hardcore)))
     return;
   a->unlocked = true;
+  a->hardcore = a->hardcore || m_hardcore;
   a->unlock_time = static_cast<int64_t>(std::time(nullptr));
   SaveUnlocks();
   m_pending_deactivate.push_back(id);
