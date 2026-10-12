@@ -2440,7 +2440,8 @@ void App::RenderOptions()
       }
       case OPT_PGXP: return {"Corregir geometría (PGXP)", yesno(m_cfg.pgxp), hw, true};
       case OPT_WIDESCREEN:
-        return {"Pantalla panorámica 16:9", m_ws_available ? yesno(m_cfg.widescreen) : "No disponible para este disco",
+        return {"Aspecto de la pantalla",
+                m_ws_available ? (m_cfg.widescreen ? "16:9" : "4:3") : "4:3 (16:9 no disponible para este disco)",
                 m_ws_available, m_ws_available};
       case OPT_SIDEART: return {"Bordes laterales", m_cfg.side_art ? "Ilustración" : "Negro", true, true};
       case OPT_SMOOTH: return {"Suavizar imagen", yesno(m_cfg.smooth_filter), true, true};
@@ -2534,7 +2535,8 @@ void App::RenderOptions()
     case OPT_TEXFILTER: help = "xBR y JINC2 redibujan las texturas en alta definición. Original = píxeles tal cual."; break;
     case OPT_PGXP: help = "Reduce el temblor de los polígonos y la deformación de texturas."; break;
     case OPT_WIDESCREEN:
-      help = "Parche 16:9 del propio juego (El_Patas y PeterDelta). El HUD queda en su sitio, aunque algo más ancho.";
+      help = "4:3 es el formato original. 16:9 usa un parche del propio juego (El_Patas y PeterDelta): más campo de "
+             "visión; el HUD queda en su sitio, aunque algo más ancho.";
       break;
     case OPT_SIDEART: help = "Con el juego en 4:3, los lados muestran la ilustración del launcher oscurecida o negro."; break;
     case OPT_SMOOTH: help = "Suaviza la imagen al escalarla a la ventana (No = píxeles nítidos)."; break;

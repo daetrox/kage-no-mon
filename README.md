@@ -183,7 +183,7 @@ El emulador tiene un fallo con este juego a 3× que deja los textos ilegibles. L
 <summary><b>Con la pantalla panorámica, el HUD se ve algo más ancho</b></summary>
 
 Es normal: el parche corrige la imagen 3D, pero los elementos 2D (vida, objetos) se estiran un
-poco. Si lo prefieres, desactívala en **OPCIONES › Gráficos** y el juego se verá en 4:3 con los
+poco. Si lo prefieres, cambia **OPCIONES › Gráficos › Aspecto de la pantalla** a 4:3 y el juego se verá así con los
 lados decorados.
 </details>
 
