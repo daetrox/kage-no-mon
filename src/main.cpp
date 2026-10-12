@@ -224,6 +224,7 @@ enum class Screen
   Menu,
   Options,
   Controls,
+  Remap,
   Achievements,
   Game,
 };
@@ -260,6 +261,10 @@ enum class PsButton
   DPad,
   LStick,
   RStick,
+  DUp,    // direcciones sueltas de la cruceta (pantalla de personalización)
+  DDown,
+  DLeft,
+  DRight,
   Accept, // aceptar en menús
   Back,   // volver en menús
   Pause,  // abrir la pausa durante el juego
@@ -312,6 +317,9 @@ enum OptRow
   OPT_MUSIC,
   OPT_SFX,
   OPT_PROMPTS,
+  OPT_REMAP_KB,
+  OPT_REMAP_PAD,
+  OPT_RESET_CONTROLS,
   OPT_CONTROLS,
   OPT_BACK,
 };
@@ -336,7 +344,7 @@ const std::vector<int>& OptPageRows(int page)
     {OPT_RENDERER, OPT_SCALE, OPT_TEXFILTER, OPT_PGXP, OPT_WIDESCREEN, OPT_SIDEART, OPT_SMOOTH, OPT_FULLSCREEN,
      OPT_BACK},
     {OPT_VOLUME, OPT_MUSIC, OPT_SFX, OPT_BACK},
-    {OPT_PROMPTS, OPT_CONTROLS, OPT_BACK},
+    {OPT_PROMPTS, OPT_REMAP_KB, OPT_REMAP_PAD, OPT_RESET_CONTROLS, OPT_CONTROLS, OPT_BACK},
   };
   return pages[std::clamp(page, 0, kOptCategoryCount - 1)];
 }
@@ -381,6 +389,75 @@ std::string BiosLabel(const std::string& file)
   return label;
 }
 
+// --- Asignación de controles ---
+
+// Orden de los botones en la pantalla de personalización (índices RETRO_DEVICE_ID_JOYPAD_*).
+const int kRemapOrder[kPsButtons] = {
+  RETRO_DEVICE_ID_JOYPAD_UP, RETRO_DEVICE_ID_JOYPAD_DOWN, RETRO_DEVICE_ID_JOYPAD_LEFT, RETRO_DEVICE_ID_JOYPAD_RIGHT,
+  RETRO_DEVICE_ID_JOYPAD_B,  RETRO_DEVICE_ID_JOYPAD_A,    RETRO_DEVICE_ID_JOYPAD_Y,    RETRO_DEVICE_ID_JOYPAD_X,
+  RETRO_DEVICE_ID_JOYPAD_L,  RETRO_DEVICE_ID_JOYPAD_R,    RETRO_DEVICE_ID_JOYPAD_L2,   RETRO_DEVICE_ID_JOYPAD_R2,
+  RETRO_DEVICE_ID_JOYPAD_L3, RETRO_DEVICE_ID_JOYPAD_R3,   RETRO_DEVICE_ID_JOYPAD_START, RETRO_DEVICE_ID_JOYPAD_SELECT,
+};
+
+const char* PsButtonName(int retro_id)
+{
+  switch (retro_id)
+  {
+    case RETRO_DEVICE_ID_JOYPAD_UP: return "Arriba";
+    case RETRO_DEVICE_ID_JOYPAD_DOWN: return "Abajo";
+    case RETRO_DEVICE_ID_JOYPAD_LEFT: return "Izquierda";
+    case RETRO_DEVICE_ID_JOYPAD_RIGHT: return "Derecha";
+    case RETRO_DEVICE_ID_JOYPAD_B: return "Cruz";
+    case RETRO_DEVICE_ID_JOYPAD_A: return "Círculo";
+    case RETRO_DEVICE_ID_JOYPAD_Y: return "Cuadrado";
+    case RETRO_DEVICE_ID_JOYPAD_X: return "Triángulo";
+    case RETRO_DEVICE_ID_JOYPAD_L: return "L1";
+    case RETRO_DEVICE_ID_JOYPAD_R: return "R1";
+    case RETRO_DEVICE_ID_JOYPAD_L2: return "L2";
+    case RETRO_DEVICE_ID_JOYPAD_R2: return "R2";
+    case RETRO_DEVICE_ID_JOYPAD_L3: return "L3";
+    case RETRO_DEVICE_ID_JOYPAD_R3: return "R3";
+    case RETRO_DEVICE_ID_JOYPAD_START: return "Start";
+    case RETRO_DEVICE_ID_JOYPAD_SELECT: return "Select";
+  }
+  return "?";
+}
+
+// Teclas que el usuario no puede asignar: Esc abre la pausa y las F están ocupadas por el launcher.
+bool IsReservedKey(SDL_Scancode sc)
+{
+  return sc == SDL_SCANCODE_ESCAPE || (sc >= SDL_SCANCODE_F1 && sc <= SDL_SCANCODE_F12);
+}
+
+std::string KeyLabel(int scancode)
+{
+  if (scancode <= 0)
+    return "—";
+  const auto sc = static_cast<SDL_Scancode>(scancode);
+  switch (sc)
+  {
+    case SDL_SCANCODE_RETURN: return "Enter";
+    case SDL_SCANCODE_KP_ENTER: return "Enter (num.)";
+    case SDL_SCANCODE_BACKSPACE: return "Retroceso";
+    case SDL_SCANCODE_SPACE: return "Espacio";
+    case SDL_SCANCODE_TAB: return "Tab";
+    case SDL_SCANCODE_UP: return "Arriba";
+    case SDL_SCANCODE_DOWN: return "Abajo";
+    case SDL_SCANCODE_LEFT: return "Izquierda";
+    case SDL_SCANCODE_RIGHT: return "Derecha";
+    case SDL_SCANCODE_LSHIFT: return "Mayús izq.";
+    case SDL_SCANCODE_RSHIFT: return "Mayús der.";
+    case SDL_SCANCODE_LCTRL: return "Ctrl izq.";
+    case SDL_SCANCODE_RCTRL: return "Ctrl der.";
+    case SDL_SCANCODE_LALT: return "Alt";
+    case SDL_SCANCODE_RALT: return "Alt Gr";
+    case SDL_SCANCODE_CAPSLOCK: return "Bloq Mayús";
+    default: break;
+  }
+  const char* name = SDL_GetScancodeName(sc);
+  return (name && *name) ? name : "?";
+}
+
 } // namespace
 
 class App
@@ -401,6 +478,8 @@ private:
   void RenderMenu();
   void RenderOptions();
   void RenderOptionCategories();
+  void RenderRemap();
+  void AssignBinding(int retro_id, int value);
   void RenderControls();
   void RenderAchievements();
   void RenderGame();
@@ -518,6 +597,11 @@ private:
   std::string m_ach_game_path;
   std::string m_ws_serial_path;
   bool m_ws_available = false;
+  int m_remap_device = 0;   // 0 teclado, 1 mando
+  int m_remap_sel = 0;      // 0..15 botones, 16 restaurar, 17 volver
+  int m_remap_wait = -1;    // botón (RETRO_DEVICE_ID_JOYPAD_*) que espera una tecla/botón nuevo
+  float m_remap_timer = 0;
+  float m_reset_confirm = 0; // > 0: "Restaurar controles" pide una segunda pulsación
   int m_marquee_key = -1; // fila cuyo texto se está desplazando
   float m_marquee_start = 0;
 
@@ -1007,6 +1091,29 @@ void App::OptionChange(int row, int dir)
       if (activate)
         m_screen = Screen::Controls;
       return;
+    case OPT_REMAP_KB:
+    case OPT_REMAP_PAD:
+      if (!activate)
+        return;
+      m_screen = Screen::Remap;
+      m_remap_device = (row == OPT_REMAP_PAD) ? 1 : 0;
+      m_remap_sel = 0;
+      m_remap_wait = -1;
+      return;
+    case OPT_RESET_CONTROLS:
+      if (!activate)
+        return;
+      // Doble pulsación para confirmar: evita borrar la configuración por accidente.
+      if (m_reset_confirm > 0)
+      {
+        m_cfg.DefaultKeyboard();
+        m_cfg.DefaultPad();
+        m_reset_confirm = 0;
+        Toast("Controles restaurados por defecto");
+        break;
+      }
+      m_reset_confirm = 3.0f;
+      return;
     case OPT_BACK:
       if (activate)
       {
@@ -1040,9 +1147,9 @@ PromptStyle App::CurrentStyle() const
 
 void App::Navigate(int dy, int dx)
 {
-  const int before[] = {m_sel, m_opt_sel, m_pause_sel, m_choice_sel, m_login_focus, m_ach_sel};
+  const int before[] = {m_sel, m_opt_sel, m_pause_sel, m_choice_sel, m_login_focus, m_ach_sel, m_remap_sel};
   NavigateImpl(dy, dx);
-  const int after[] = {m_sel, m_opt_sel, m_pause_sel, m_choice_sel, m_login_focus, m_ach_sel};
+  const int after[] = {m_sel, m_opt_sel, m_pause_sel, m_choice_sel, m_login_focus, m_ach_sel, m_remap_sel};
   if (!std::equal(std::begin(before), std::end(before), std::begin(after)))
     m_audio.Play(Sfx::Move);
 }
@@ -1081,6 +1188,26 @@ void App::NavigateImpl(int dy, int dx)
         m_ach_sel = std::clamp(m_ach_sel + dy, 0, std::max(0, n - 1));
       }
       break;
+    case Screen::Remap:
+    {
+      // Dos columnas de 8 botones y, debajo, "Restaurar" (16) y "Volver" (17).
+      int& i = m_remap_sel;
+      if (dy)
+      {
+        if (i < kPsButtons)
+        {
+          const int col = i / 8, row = i % 8 + dy;
+          i = row < 0 ? kPsButtons + 1 : row > 7 ? kPsButtons : col * 8 + row;
+        }
+        else if (i == kPsButtons)
+          i = dy > 0 ? kPsButtons + 1 : 7;
+        else
+          i = dy > 0 ? 0 : kPsButtons;
+      }
+      if (dx && i < kPsButtons)
+        i = ((i / 8 + 1) % 2) * 8 + i % 8;
+      break;
+    }
     case Screen::Game:
       if (m_paused)
         m_pause_sel = (m_pause_sel + dy + kPauseItems) % kPauseItems;
@@ -1135,12 +1262,52 @@ void App::Accept()
           StartLogin();
       }
       break;
+    case Screen::Remap:
+      if (m_remap_sel < kPsButtons)
+      {
+        m_audio.Play(Sfx::Select);
+        m_remap_wait = kRemapOrder[m_remap_sel];
+        m_remap_timer = 6.0f;
+      }
+      else if (m_remap_sel == kPsButtons)
+      {
+        m_audio.Play(Sfx::Select);
+        if (m_remap_device == 0)
+          m_cfg.DefaultKeyboard();
+        else
+          m_cfg.DefaultPad();
+        m_cfg.Save();
+        Toast(m_remap_device == 0 ? "Teclado restaurado por defecto" : "Mando restaurado por defecto");
+      }
+      else
+      {
+        Back();
+      }
+      break;
     case Screen::Game:
       if (m_paused)
         ActivatePause(m_pause_sel);
       break;
     default: break;
   }
+}
+
+// Asigna `value` (tecla o botón del mando) al botón `retro_id`. Si ya estaba en uso por otro botón
+// del mismo dispositivo, se intercambian: nunca quedan dos acciones en la misma tecla.
+void App::AssignBinding(int retro_id, int value)
+{
+  int* table = m_remap_device == 0 ? m_cfg.key_bind : m_cfg.pad_bind;
+  const int old = table[retro_id];
+  for (int i = 0; i < kPsButtons; i++)
+    if (i != retro_id && table[i] == value)
+    {
+      table[i] = old;
+      Toast(std::string(PsButtonName(i)) + " pasa a la asignación anterior de " + PsButtonName(retro_id));
+    }
+  table[retro_id] = value;
+  m_cfg.Save();
+  m_remap_wait = -1;
+  m_audio.Play(Sfx::Select);
 }
 
 void App::Back()
@@ -1171,6 +1338,16 @@ void App::Back()
       m_screen = Screen::Menu;
       m_sel = 1;
       break;
+    case Screen::Remap:
+      if (m_remap_wait >= 0)
+      {
+        m_remap_wait = -1;
+        break;
+      }
+      m_screen = Screen::Options;
+      m_opt_page = 3;
+      m_opt_sel = m_remap_device == 0 ? 1 : 2;
+      break;
     case Screen::Controls:
       if (m_emu.IsRunning())
         m_screen = Screen::Game;
@@ -1194,48 +1371,25 @@ EmuInput App::GatherGameInput()
 {
   EmuInput in;
   in.buttons = m_test_buttons;
+  // Teclado y mando tienen asignaciones independientes (OPCIONES › Controles).
   const Uint8* k = SDL_GetKeyboardState(nullptr);
-  auto set = [&](int id, bool on) {
+  for (int id = 0; id < kPsButtons; id++)
+  {
+    bool on = false;
+    const int key = m_cfg.key_bind[id];
+    if (key > 0 && key < SDL_NUM_SCANCODES && k[key])
+      on = true;
+    const int pad = m_cfg.pad_bind[id];
+    if (m_pad && pad >= kPadAxisBase)
+      on |= SDL_GameControllerGetAxis(m_pad, static_cast<SDL_GameControllerAxis>(pad - kPadAxisBase)) > 12000;
+    else if (m_pad && pad >= 0)
+      on |= SDL_GameControllerGetButton(m_pad, static_cast<SDL_GameControllerButton>(pad)) != 0;
     if (on)
       in.buttons |= static_cast<uint16_t>(1u << id);
-  };
-  // Teclado: flechas, Z=✕, X=○, A=□, S=△, Q/W=L1/R1, E/R=L2/R2, Enter=Start, Retroceso=Select.
-  set(RETRO_DEVICE_ID_JOYPAD_UP, k[SDL_SCANCODE_UP]);
-  set(RETRO_DEVICE_ID_JOYPAD_DOWN, k[SDL_SCANCODE_DOWN]);
-  set(RETRO_DEVICE_ID_JOYPAD_LEFT, k[SDL_SCANCODE_LEFT]);
-  set(RETRO_DEVICE_ID_JOYPAD_RIGHT, k[SDL_SCANCODE_RIGHT]);
-  set(RETRO_DEVICE_ID_JOYPAD_B, k[SDL_SCANCODE_Z]);
-  set(RETRO_DEVICE_ID_JOYPAD_A, k[SDL_SCANCODE_X]);
-  set(RETRO_DEVICE_ID_JOYPAD_Y, k[SDL_SCANCODE_A]);
-  set(RETRO_DEVICE_ID_JOYPAD_X, k[SDL_SCANCODE_S]);
-  set(RETRO_DEVICE_ID_JOYPAD_L, k[SDL_SCANCODE_Q]);
-  set(RETRO_DEVICE_ID_JOYPAD_R, k[SDL_SCANCODE_W]);
-  set(RETRO_DEVICE_ID_JOYPAD_L2, k[SDL_SCANCODE_E]);
-  set(RETRO_DEVICE_ID_JOYPAD_R2, k[SDL_SCANCODE_R]);
-  set(RETRO_DEVICE_ID_JOYPAD_START, k[SDL_SCANCODE_RETURN]);
-  set(RETRO_DEVICE_ID_JOYPAD_SELECT, k[SDL_SCANCODE_BACKSPACE] || k[SDL_SCANCODE_RSHIFT]);
-
+  }
   if (m_pad)
   {
-    auto b = [&](SDL_GameControllerButton btn) { return SDL_GameControllerGetButton(m_pad, btn) != 0; };
     auto ax = [&](SDL_GameControllerAxis a) { return SDL_GameControllerGetAxis(m_pad, a); };
-    set(RETRO_DEVICE_ID_JOYPAD_UP, b(SDL_CONTROLLER_BUTTON_DPAD_UP));
-    set(RETRO_DEVICE_ID_JOYPAD_DOWN, b(SDL_CONTROLLER_BUTTON_DPAD_DOWN));
-    set(RETRO_DEVICE_ID_JOYPAD_LEFT, b(SDL_CONTROLLER_BUTTON_DPAD_LEFT));
-    set(RETRO_DEVICE_ID_JOYPAD_RIGHT, b(SDL_CONTROLLER_BUTTON_DPAD_RIGHT));
-    // Disposición posicional: el botón de abajo es ✕, como en un mando de PlayStation.
-    set(RETRO_DEVICE_ID_JOYPAD_B, b(SDL_CONTROLLER_BUTTON_A));
-    set(RETRO_DEVICE_ID_JOYPAD_A, b(SDL_CONTROLLER_BUTTON_B));
-    set(RETRO_DEVICE_ID_JOYPAD_Y, b(SDL_CONTROLLER_BUTTON_X));
-    set(RETRO_DEVICE_ID_JOYPAD_X, b(SDL_CONTROLLER_BUTTON_Y));
-    set(RETRO_DEVICE_ID_JOYPAD_L, b(SDL_CONTROLLER_BUTTON_LEFTSHOULDER));
-    set(RETRO_DEVICE_ID_JOYPAD_R, b(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER));
-    set(RETRO_DEVICE_ID_JOYPAD_L2, ax(SDL_CONTROLLER_AXIS_TRIGGERLEFT) > 12000);
-    set(RETRO_DEVICE_ID_JOYPAD_R2, ax(SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 12000);
-    set(RETRO_DEVICE_ID_JOYPAD_L3, b(SDL_CONTROLLER_BUTTON_LEFTSTICK));
-    set(RETRO_DEVICE_ID_JOYPAD_R3, b(SDL_CONTROLLER_BUTTON_RIGHTSTICK));
-    set(RETRO_DEVICE_ID_JOYPAD_START, b(SDL_CONTROLLER_BUTTON_START));
-    set(RETRO_DEVICE_ID_JOYPAD_SELECT, b(SDL_CONTROLLER_BUTTON_BACK));
     in.analog[0][0] = ax(SDL_CONTROLLER_AXIS_LEFTX);
     in.analog[0][1] = ax(SDL_CONTROLLER_AXIS_LEFTY);
     in.analog[1][0] = ax(SDL_CONTROLLER_AXIS_RIGHTX);
@@ -1260,6 +1414,51 @@ void App::HandleEvent(const SDL_Event& e)
     m_intro_t = kIntroLen;
     m_fade = 1.0f;
     return;
+  }
+
+  // Esperando una tecla/botón nuevo en la pantalla de personalización.
+  if (m_remap_wait >= 0)
+  {
+    if (e.type == SDL_KEYDOWN && !e.key.repeat)
+    {
+      const SDL_Scancode sc = e.key.keysym.scancode;
+      if (sc == SDL_SCANCODE_ESCAPE)
+      {
+        m_audio.Play(Sfx::Cancel);
+        m_remap_wait = -1;
+      }
+      else if (m_remap_device == 0)
+      {
+        if (IsReservedKey(sc))
+          Toast("Esa tecla está reservada por el launcher");
+        else
+          AssignBinding(m_remap_wait, sc);
+      }
+      return;
+    }
+    if (m_remap_device == 1 && e.type == SDL_CONTROLLERBUTTONDOWN)
+    {
+      if (e.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE)
+        Toast("El botón central está reservado para la pausa");
+      else
+        AssignBinding(m_remap_wait, e.cbutton.button);
+      return;
+    }
+    if (m_remap_device == 1 && e.type == SDL_CONTROLLERAXISMOTION && e.caxis.value > 20000 &&
+        (e.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT || e.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT))
+    {
+      AssignBinding(m_remap_wait, kPadAxisBase + e.caxis.axis);
+      return;
+    }
+    if (e.type == SDL_MOUSEBUTTONDOWN)
+    {
+      m_audio.Play(Sfx::Cancel);
+      m_remap_wait = -1;
+      return;
+    }
+    if (e.type == SDL_CONTROLLERBUTTONDOWN || e.type == SDL_CONTROLLERAXISMOTION || e.type == SDL_KEYDOWN ||
+        e.type == SDL_TEXTINPUT)
+      return;
   }
 
   switch (e.type)
@@ -1485,6 +1684,7 @@ void App::HandleEvent(const SDL_Event& e)
           case 1: m_opt_sel = z.index; break;
           case 2: m_pause_sel = z.index; break;
           case 3: m_choice_sel = z.index; break;
+          case 7: m_remap_sel = z.index; break;
           default: break;
         }
       }
@@ -1552,6 +1752,16 @@ void App::Update(float dt)
       m_running = false;
   }
   m_toast_time = std::max(0.0f, m_toast_time - dt);
+  m_reset_confirm = std::max(0.0f, m_reset_confirm - dt);
+  if (m_remap_wait >= 0)
+  {
+    m_remap_timer -= dt;
+    if (m_remap_timer <= 0 || m_screen != Screen::Remap)
+    {
+      m_remap_wait = -1;
+      Toast("Sin cambios");
+    }
+  }
   m_picker.Poll();
   m_ach.Poll();
   // Música: plena en los menús, baja en la pausa y en silencio mientras se juega.
@@ -1694,6 +1904,7 @@ void App::Render()
       case Screen::Menu: RenderMenu(); break;
       case Screen::Options: RenderOptions(); break;
       case Screen::Controls: RenderControls(); break;
+      case Screen::Remap: RenderRemap(); break;
       case Screen::Achievements: RenderAchievements(); break;
       default: break;
     }
@@ -1805,77 +2016,120 @@ float App::DrawGlyph(PsButton b, float x, float y, float h, PromptStyle style, b
   const Color xX = {0.15f, 0.45f, 0.86f, 1}, xY = {0.95f, 0.72f, 0.1f, 1};
   const Color key = {0.85f, 0.83f, 0.8f, 1};
 
+  // Botón de PS1 -> índice de asignación (los de juego); -1 para acciones fijas de la interfaz.
+  auto retro_id = [](PsButton pb) -> int {
+    switch (pb)
+    {
+      case PsButton::Cross: return RETRO_DEVICE_ID_JOYPAD_B;
+      case PsButton::Circle: return RETRO_DEVICE_ID_JOYPAD_A;
+      case PsButton::Square: return RETRO_DEVICE_ID_JOYPAD_Y;
+      case PsButton::Triangle: return RETRO_DEVICE_ID_JOYPAD_X;
+      case PsButton::L1: return RETRO_DEVICE_ID_JOYPAD_L;
+      case PsButton::R1: return RETRO_DEVICE_ID_JOYPAD_R;
+      case PsButton::L2: return RETRO_DEVICE_ID_JOYPAD_L2;
+      case PsButton::R2: return RETRO_DEVICE_ID_JOYPAD_R2;
+      case PsButton::L3: return RETRO_DEVICE_ID_JOYPAD_L3;
+      case PsButton::R3: return RETRO_DEVICE_ID_JOYPAD_R3;
+      case PsButton::Start: return RETRO_DEVICE_ID_JOYPAD_START;
+      case PsButton::Select: return RETRO_DEVICE_ID_JOYPAD_SELECT;
+      case PsButton::DUp: return RETRO_DEVICE_ID_JOYPAD_UP;
+      case PsButton::DDown: return RETRO_DEVICE_ID_JOYPAD_DOWN;
+      case PsButton::DLeft: return RETRO_DEVICE_ID_JOYPAD_LEFT;
+      case PsButton::DRight: return RETRO_DEVICE_ID_JOYPAD_RIGHT;
+      default: return -1;
+    }
+  };
+  // Icono de un botón físico del mando según el estilo (Xbox o PlayStation).
+  auto pad_glyph = [&](int v) -> G {
+    const bool ps = (style == PromptStyle::PlayStation);
+    if (v >= kPadAxisBase)
+    {
+      const bool left = (v - kPadAxisBase) == SDL_CONTROLLER_AXIS_TRIGGERLEFT;
+      return {6, key, ps ? (left ? "L2" : "R2") : (left ? "LT" : "RT")};
+    }
+    switch (v)
+    {
+      case SDL_CONTROLLER_BUTTON_A: return ps ? G{2, psBlue, ""} : G{1, xA, "A"};
+      case SDL_CONTROLLER_BUTTON_B: return ps ? G{3, psRed, ""} : G{1, xB, "B"};
+      case SDL_CONTROLLER_BUTTON_X: return ps ? G{4, psPink, ""} : G{1, xX, "X"};
+      case SDL_CONTROLLER_BUTTON_Y: return ps ? G{5, psGreen, ""} : G{1, xY, "Y"};
+      case SDL_CONTROLLER_BUTTON_BACK: return {6, key, ps ? "Select" : "Vista"};
+      case SDL_CONTROLLER_BUTTON_GUIDE: return {6, key, ps ? "PS" : "Xbox"};
+      case SDL_CONTROLLER_BUTTON_START: return {6, key, ps ? "Start" : "Menú"};
+      case SDL_CONTROLLER_BUTTON_LEFTSTICK: return {6, key, ps ? "L3" : "LS"};
+      case SDL_CONTROLLER_BUTTON_RIGHTSTICK: return {6, key, ps ? "R3" : "RS"};
+      case SDL_CONTROLLER_BUTTON_LEFTSHOULDER: return {6, key, ps ? "L1" : "LB"};
+      case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: return {6, key, ps ? "R1" : "RB"};
+      case SDL_CONTROLLER_BUTTON_DPAD_UP: return {6, key, "Cruceta arriba"};
+      case SDL_CONTROLLER_BUTTON_DPAD_DOWN: return {6, key, "Cruceta abajo"};
+      case SDL_CONTROLLER_BUTTON_DPAD_LEFT: return {6, key, "Cruceta izq."};
+      case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: return {6, key, "Cruceta der."};
+      case SDL_CONTROLLER_BUTTON_MISC1: return {6, key, ps ? "Micro" : "Compartir"};
+      case SDL_CONTROLLER_BUTTON_PADDLE1: return {6, key, "P1"};
+      case SDL_CONTROLLER_BUTTON_PADDLE2: return {6, key, "P2"};
+      case SDL_CONTROLLER_BUTTON_PADDLE3: return {6, key, "P3"};
+      case SDL_CONTROLLER_BUTTON_PADDLE4: return {6, key, "P4"};
+      case SDL_CONTROLLER_BUTTON_TOUCHPAD: return {6, key, "Panel táctil"};
+      default: return {6, key, "—"};
+    }
+  };
+  const int dpad_ids[4] = {RETRO_DEVICE_ID_JOYPAD_UP, RETRO_DEVICE_ID_JOYPAD_DOWN, RETRO_DEVICE_ID_JOYPAD_LEFT,
+                           RETRO_DEVICE_ID_JOYPAD_RIGHT};
+
   G g{0, key, "?"};
   if (style == PromptStyle::Keyboard)
   {
-    switch (b)
-    {
-      case PsButton::Cross: g.text = "Z"; break;
-      case PsButton::Circle: g.text = "X"; break;
-      case PsButton::Square: g.text = "A"; break;
-      case PsButton::Triangle: g.text = "S"; break;
-      case PsButton::L1: g.text = "Q"; break;
-      case PsButton::R1: g.text = "W"; break;
-      case PsButton::L2: g.text = "E"; break;
-      case PsButton::R2: g.text = "R"; break;
-      case PsButton::Start: g.text = "Enter"; break;
-      case PsButton::Select: g.text = "Retroceso"; break;
-      case PsButton::DPad: g.text = "Flechas"; break;
-      case PsButton::Accept: g.text = "Enter"; break;
-      case PsButton::Back:
-      case PsButton::Pause: g.text = "Esc"; break;
-      default: g.text = "—"; break;
-    }
+    if (retro_id(b) >= 0)
+      g.text = KeyLabel(m_cfg.key_bind[retro_id(b)]);
+    else
+      switch (b)
+      {
+        case PsButton::DPad:
+        {
+          const int arrows[4] = {SDL_SCANCODE_UP, SDL_SCANCODE_DOWN, SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT};
+          bool are_arrows = true;
+          std::string joined;
+          for (int i = 0; i < 4; i++)
+          {
+            are_arrows &= m_cfg.key_bind[dpad_ids[i]] == arrows[i];
+            joined += (i ? " " : "") + KeyLabel(m_cfg.key_bind[dpad_ids[i]]);
+          }
+          g.text = are_arrows ? "Flechas" : joined;
+          break;
+        }
+        case PsButton::Accept: g.text = "Enter"; break;
+        case PsButton::Back:
+        case PsButton::Pause: g.text = "Esc"; break;
+        default: g.text = "—"; break;
+      }
   }
   else
   {
+    // En los menús siempre se acepta con el botón de abajo y se vuelve con el de la derecha.
     if (b == PsButton::Accept)
-      b = PsButton::Cross;
-    if (b == PsButton::Back)
-      b = PsButton::Circle;
-    if (style == PromptStyle::Xbox)
-    {
-      switch (b)
-      {
-        case PsButton::Cross: g = {1, xA, "A"}; break;
-        case PsButton::Circle: g = {1, xB, "B"}; break;
-        case PsButton::Square: g = {1, xX, "X"}; break;
-        case PsButton::Triangle: g = {1, xY, "Y"}; break;
-        case PsButton::L1: g = {6, key, "LB"}; break;
-        case PsButton::R1: g = {6, key, "RB"}; break;
-        case PsButton::L2: g = {6, key, "LT"}; break;
-        case PsButton::R2: g = {6, key, "RT"}; break;
-        case PsButton::L3: g = {6, key, "LS"}; break;
-        case PsButton::R3: g = {6, key, "RS"}; break;
-        case PsButton::Start: g = {6, key, "Menú"}; break;
-        case PsButton::Select: g = {6, key, "Vista"}; break;
-        case PsButton::DPad: g = {6, key, "Cruceta"}; break;
-        case PsButton::LStick: g = {6, key, "Stick izq."}; break;
-        case PsButton::RStick: g = {6, key, "Stick der."}; break;
-        case PsButton::Pause: g = {6, key, "LS + RS  /  Xbox"}; break;
-        default: break;
-      }
-    }
+      g = pad_glyph(SDL_CONTROLLER_BUTTON_A);
+    else if (b == PsButton::Back)
+      g = pad_glyph(SDL_CONTROLLER_BUTTON_B);
+    else if (retro_id(b) >= 0)
+      g = pad_glyph(m_cfg.pad_bind[retro_id(b)]);
     else
     {
+      const bool ps = (style == PromptStyle::PlayStation);
       switch (b)
       {
-        case PsButton::Cross: g = {2, psBlue, ""}; break;
-        case PsButton::Circle: g = {3, psRed, ""}; break;
-        case PsButton::Square: g = {4, psPink, ""}; break;
-        case PsButton::Triangle: g = {5, psGreen, ""}; break;
-        case PsButton::L1: g = {6, key, "L1"}; break;
-        case PsButton::R1: g = {6, key, "R1"}; break;
-        case PsButton::L2: g = {6, key, "L2"}; break;
-        case PsButton::R2: g = {6, key, "R2"}; break;
-        case PsButton::L3: g = {6, key, "L3"}; break;
-        case PsButton::R3: g = {6, key, "R3"}; break;
-        case PsButton::Start: g = {6, key, "Start"}; break;
-        case PsButton::Select: g = {6, key, "Select"}; break;
-        case PsButton::DPad: g = {6, key, "Cruceta"}; break;
+        case PsButton::DPad:
+        {
+          bool is_dpad = true;
+          const int dpad[4] = {SDL_CONTROLLER_BUTTON_DPAD_UP, SDL_CONTROLLER_BUTTON_DPAD_DOWN,
+                               SDL_CONTROLLER_BUTTON_DPAD_LEFT, SDL_CONTROLLER_BUTTON_DPAD_RIGHT};
+          for (int i = 0; i < 4; i++)
+            is_dpad &= m_cfg.pad_bind[dpad_ids[i]] == dpad[i];
+          g = {6, key, is_dpad ? "Cruceta" : "Personalizada"};
+          break;
+        }
         case PsButton::LStick: g = {6, key, "Stick izq."}; break;
         case PsButton::RStick: g = {6, key, "Stick der."}; break;
-        case PsButton::Pause: g = {6, key, "L3 + R3  /  PS"}; break;
+        case PsButton::Pause: g = {6, key, ps ? "L3 + R3  /  PS" : "LS + RS  /  Xbox"}; break;
         default: break;
       }
     }
@@ -2202,6 +2456,10 @@ void App::RenderOptions()
                                                                     : "Automático";
         return {"Iconos de botones", p, true, true};
       }
+      case OPT_REMAP_KB: return {"Personalizar teclado", ""};
+      case OPT_REMAP_PAD: return {"Personalizar mando", ""};
+      case OPT_RESET_CONTROLS:
+        return {"Restaurar controles por defecto", m_reset_confirm > 0 ? "¿Seguro? Pulsa otra vez" : ""};
       case OPT_CONTROLS: return {"Ver esquema de controles", ""};
       case OPT_BACK: return {"Volver", ""};
     }
@@ -2285,7 +2543,10 @@ void App::RenderOptions()
     case OPT_MUSIC: help = "Música del launcher (menús y pausa)."; break;
     case OPT_SFX: help = "Sonidos del launcher al moverte, elegir y cancelar."; break;
     case OPT_PROMPTS: help = "Iconos de botones del launcher. Automático cambia según uses teclado o mando."; break;
-    case OPT_CONTROLS: help = "Teclado, mando de Xbox y mando de PlayStation."; break;
+    case OPT_CONTROLS: help = "Teclado, mando de Xbox y mando de PlayStation, con tus asignaciones."; break;
+    case OPT_REMAP_KB: help = "Cambia qué tecla corresponde a cada botón. No afecta al mando."; break;
+    case OPT_REMAP_PAD: help = "Cambia qué botón del mando corresponde a cada botón. No afecta al teclado."; break;
+    case OPT_RESET_CONTROLS: help = "Vuelve a la asignación original de teclado y mando (pide confirmación)."; break;
     default: help = ""; break;
   }
   float ly = row0 + rows.size() * rh + 60;
@@ -2300,6 +2561,117 @@ void App::RenderOptions()
     m_r.Text(m_r.ui, "Los cambios de imagen se aplican la próxima vez que inicies el juego.", IX(px + 52),
              IY(py + ph - 64), IS(20), kDim);
   RenderHints({{PsButton::Accept, "Aceptar"}, {PsButton::Back, "Volver"}}, m_w - IS(28), m_h - IS(58));
+}
+
+void App::RenderRemap()
+{
+  DimScreen(0.5f);
+  const float px = 40, py = 56, pw = 900, ph = 950;
+  Panel(px, py, pw, ph);
+  const bool kb = (m_remap_device == 0);
+  m_r.Text(m_r.ui, "OPCIONES  ›  CONTROLES  ›", IX(px + 48), IY(py + 18), IS(22), kDim);
+  m_r.Text(m_r.brush, kb ? "TECLADO" : "MANDO", IX(px + 44), IY(py + 42), IS(52), kWhite);
+  m_r.TextCentered(m_r.kanji, "操", IX(px + pw - 80), IY(py + 70), IS(84), {0.6f, 0.04f, 0.04f, 0.45f});
+
+  // Estilo de los iconos del mando: el elegido en Opciones o el del mando conectado.
+  PromptStyle style = PromptStyle::Keyboard;
+  if (!kb)
+    style = m_cfg.prompt_style == "playstation" ? PromptStyle::PlayStation
+            : m_cfg.prompt_style == "xbox"      ? PromptStyle::Xbox
+                                                : PadStyle();
+  // Botón de PS1 de cada índice de asignación, para reutilizar los iconos.
+  auto as_button = [](int id) -> PsButton {
+    switch (id)
+    {
+      case RETRO_DEVICE_ID_JOYPAD_UP: return PsButton::DUp;
+      case RETRO_DEVICE_ID_JOYPAD_DOWN: return PsButton::DDown;
+      case RETRO_DEVICE_ID_JOYPAD_LEFT: return PsButton::DLeft;
+      case RETRO_DEVICE_ID_JOYPAD_RIGHT: return PsButton::DRight;
+      case RETRO_DEVICE_ID_JOYPAD_B: return PsButton::Cross;
+      case RETRO_DEVICE_ID_JOYPAD_A: return PsButton::Circle;
+      case RETRO_DEVICE_ID_JOYPAD_Y: return PsButton::Square;
+      case RETRO_DEVICE_ID_JOYPAD_X: return PsButton::Triangle;
+      case RETRO_DEVICE_ID_JOYPAD_L: return PsButton::L1;
+      case RETRO_DEVICE_ID_JOYPAD_R: return PsButton::R1;
+      case RETRO_DEVICE_ID_JOYPAD_L2: return PsButton::L2;
+      case RETRO_DEVICE_ID_JOYPAD_R2: return PsButton::R2;
+      case RETRO_DEVICE_ID_JOYPAD_L3: return PsButton::L3;
+      case RETRO_DEVICE_ID_JOYPAD_R3: return PsButton::R3;
+      case RETRO_DEVICE_ID_JOYPAD_START: return PsButton::Start;
+      default: return PsButton::Select;
+    }
+  };
+
+  const float colx[2] = {px + 30, px + 465};
+  const float cw = 405, y0 = py + 140, rh = 62;
+  for (int i = 0; i < kPsButtons; i++)
+  {
+    const int id = kRemapOrder[i];
+    const float x = colx[i / 8], y = y0 + (i % 8) * rh;
+    const bool sel = (i == m_remap_sel);
+    const bool waiting = sel && m_remap_wait == id;
+    const Rect rr = IR({x, y, cw, rh - 8});
+    if (sel)
+      m_r.Sprite(m_btn_sel, rr.x - IS(8), rr.y - IS(6), rr.w + IS(16), rr.h + IS(12), {1, 1, 1, 0.95f});
+    const Color lc = sel ? Color{1, 0.98f, 0.96f, 1} : Color{0.86f, 0.84f, 0.82f, 1};
+    m_r.Text(m_r.ui, PsButtonName(id), rr.x + IS(20), rr.y + IS(8), IS(28), lc);
+    if (waiting)
+    {
+      const float pulse = 0.6f + 0.4f * std::sin(m_time * 8.0f);
+      const std::string msg = std::string(kb ? "Pulsa una tecla" : "Pulsa un botón") + "… (" +
+                              std::to_string(static_cast<int>(std::ceil(m_remap_timer))) + ")";
+      m_r.Text(m_r.ui, msg, rr.x + rr.w - IS(20), rr.y + IS(10), IS(24), WithAlpha(kGold, pulse), Align::Right);
+    }
+    else
+    {
+      const float gh = IS(38);
+      const float gw = DrawGlyph(as_button(id), 0, 0, gh, style, false);
+      const float max_w = rr.w - IS(170);
+      if (gw <= max_w)
+        DrawGlyph(as_button(id), rr.x + rr.w - IS(18) - gw, rr.y + (rr.h - gh) / 2, gh, style);
+      else
+        FitText(m_r.ui, kb ? KeyLabel(m_cfg.key_bind[id]) : "…", rr.x + IS(150), rr.y + IS(10), max_w, IS(24),
+                lc, Align::Right, sel, 20000 + i);
+    }
+    Hot(rr, 7, i, [this, i](float, float) {
+      m_remap_sel = i;
+      Accept();
+    });
+  }
+
+  const char* extra[2] = {"Restaurar por defecto", "Volver"};
+  for (int k = 0; k < 2; k++)
+  {
+    const int i = kPsButtons + k;
+    const float y = y0 + 8 * rh + 22 + k * rh;
+    const bool sel = (i == m_remap_sel);
+    const Rect rr = IR({px + 30, y, pw - 60, rh - 8});
+    if (sel)
+      m_r.Sprite(m_btn_sel, rr.x - IS(8), rr.y - IS(6), rr.w + IS(16), rr.h + IS(12), {1, 1, 1, 0.95f});
+    m_r.Text(m_r.ui, extra[k], rr.x + IS(20), rr.y + IS(8), IS(28),
+             sel ? Color{1, 0.98f, 0.96f, 1} : Color{0.86f, 0.84f, 0.82f, 1});
+    Hot(rr, 7, i, [this, i](float, float) {
+      m_remap_sel = i;
+      Accept();
+    });
+  }
+
+  std::string help;
+  if (m_remap_wait >= 0)
+    help = kb ? "Pulsa la tecla nueva. Esc cancela. Las teclas F y Esc están reservadas."
+              : "Pulsa el botón nuevo en el mando. Esc o un clic cancelan.";
+  else
+    help = "Elige un botón y pulsa Aceptar para cambiarlo. Si la tecla ya la usa otro botón, se intercambian. "
+           "Los menús del launcher siempre se manejan con las flechas, Enter y Esc (o cruceta, A y B).";
+  if (!kb && !m_pad)
+    help += "\nNo hay ningún mando conectado.";
+  float ly = y0 + 10 * rh + 50;
+  for (const std::string& line : Wrap(m_r.ui, help, IS(23), IS(pw - 90)))
+  {
+    m_r.Text(m_r.ui, line, IX(px + 48), IY(ly), IS(23), {0.84f, 0.81f, 0.78f, 0.95f});
+    ly += 31;
+  }
+  RenderHints({{PsButton::Accept, "Cambiar"}, {PsButton::Back, "Volver"}}, m_w - IS(28), m_h - IS(58));
 }
 
 void App::RenderControls()
@@ -2701,6 +3073,16 @@ int App::Run(int argc, char** argv)
         m_outro_t = static_cast<float>(std::atof(ot));
       if (screenshot_screen == "options") m_screen = Screen::Options;
       if (screenshot_screen == "controls") m_screen = Screen::Controls;
+      if (screenshot_screen == "remap") m_screen = Screen::Remap;
+      if (const char* dev = std::getenv("TENSHU_TEST_DEVICE"))
+        m_remap_device = std::atoi(dev);
+      if (const char* rs = std::getenv("TENSHU_TEST_REMAPSEL"))
+        m_remap_sel = std::atoi(rs);
+      if (std::getenv("TENSHU_TEST_WAIT"))
+      {
+        m_remap_wait = kRemapOrder[m_remap_sel];
+        m_remap_timer = 4.2f;
+      }
       if (screenshot_screen == "achievements") m_screen = Screen::Achievements;
       if (screenshot_screen == "choice") m_modal = Modal::PlayChoice;
       if (screenshot_screen == "dialog") ShowDialog("Ejemplo de diálogo.\nSegunda línea de texto.");

@@ -130,6 +130,10 @@ chmod +x KageNoMon-*.AppImage
 | Guardar / cargar rápido | `F5` / `F7` | Desde el menú de pausa |
 | Pantalla completa | `F11` o `Alt+Enter` | — |
 
+> [!TIP]
+> Puedes cambiar cualquier tecla o botón en **OPCIONES › Controles › Personalizar teclado / mando**.
+> Teclado y mando se configuran por separado, y **Restaurar controles por defecto** lo deja todo como al principio.
+
 ---
 
 ## 🏆 Logros

@@ -2,10 +2,22 @@
 #include <string>
 #include <vector>
 
+// Botones del mando de PlayStation; el índice es RETRO_DEVICE_ID_JOYPAD_* (0..15).
+constexpr int kPsButtons = 16;
+// Asignación del mando: 0..99 = botón SDL_GameControllerButton, 100+eje = gatillo, -1 = sin asignar.
+constexpr int kPadAxisBase = 100;
+
 struct Config
 {
+  Config() { DefaultKeyboard(); DefaultPad(); }
+  void DefaultKeyboard();
+  void DefaultPad();
+
+  int key_bind[kPsButtons]; // SDL_Scancode por botón (0 = sin asignar)
+  int pad_bind[kPsButtons]; // ver kPadAxisBase
+
   std::string game_path;        // .cue / .bin / .chd seleccionado por el usuario
-  std::string bios_file;        // BIOS elegida dentro de bios/ (vacío = automática según la región)
+  std::string bios_file;        // BIOS elegida dentro de bios/ (vacío = OpenBIOS integrada)
 
   bool hardware_renderer = true; // OpenGL (permite escalado) o software (máxima precisión)
   int resolution_scale = 4;      // 1, 2, 4 o 5 (3x corrompe el texto de Tenchu 2 en SwanStation)

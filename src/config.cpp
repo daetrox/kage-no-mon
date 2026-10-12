@@ -1,5 +1,8 @@
 #include "config.h"
 
+#include <SDL_gamecontroller.h>
+#include <SDL_scancode.h>
+
 #include <algorithm>
 #include <cstdlib>
 #include <dirent.h>
@@ -182,6 +185,45 @@ void MakeDirs(const std::string& path)
 
 static std::string ConfigFile() { return Paths::ConfigDir() + "/config.ini"; }
 
+// Índices = RETRO_DEVICE_ID_JOYPAD_*:
+// 0 B(✕) 1 Y(□) 2 Select 3 Start 4 Arriba 5 Abajo 6 Izq. 7 Der. 8 A(◯) 9 X(△) 10 L1 11 R1 12 L2 13 R2 14 L3 15 R3
+void Config::DefaultKeyboard()
+{
+  static const int defaults[kPsButtons] = {
+    SDL_SCANCODE_Z,  SDL_SCANCODE_A,  SDL_SCANCODE_BACKSPACE, SDL_SCANCODE_RETURN,
+    SDL_SCANCODE_UP, SDL_SCANCODE_DOWN, SDL_SCANCODE_LEFT,    SDL_SCANCODE_RIGHT,
+    SDL_SCANCODE_X,  SDL_SCANCODE_S,  SDL_SCANCODE_Q,         SDL_SCANCODE_W,
+    SDL_SCANCODE_E,  SDL_SCANCODE_R,  SDL_SCANCODE_C,         SDL_SCANCODE_V,
+  };
+  for (int i = 0; i < kPsButtons; i++)
+    key_bind[i] = defaults[i];
+}
+
+void Config::DefaultPad()
+{
+  // Disposición posicional: el botón de abajo es ✕, como en un mando de PlayStation.
+  static const int defaults[kPsButtons] = {
+    SDL_CONTROLLER_BUTTON_A,
+    SDL_CONTROLLER_BUTTON_X,
+    SDL_CONTROLLER_BUTTON_BACK,
+    SDL_CONTROLLER_BUTTON_START,
+    SDL_CONTROLLER_BUTTON_DPAD_UP,
+    SDL_CONTROLLER_BUTTON_DPAD_DOWN,
+    SDL_CONTROLLER_BUTTON_DPAD_LEFT,
+    SDL_CONTROLLER_BUTTON_DPAD_RIGHT,
+    SDL_CONTROLLER_BUTTON_B,
+    SDL_CONTROLLER_BUTTON_Y,
+    SDL_CONTROLLER_BUTTON_LEFTSHOULDER,
+    SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,
+    kPadAxisBase + SDL_CONTROLLER_AXIS_TRIGGERLEFT,
+    kPadAxisBase + SDL_CONTROLLER_AXIS_TRIGGERRIGHT,
+    SDL_CONTROLLER_BUTTON_LEFTSTICK,
+    SDL_CONTROLLER_BUTTON_RIGHTSTICK,
+  };
+  for (int i = 0; i < kPsButtons; i++)
+    pad_bind[i] = defaults[i];
+}
+
 void Config::Load()
 {
   std::ifstream in(ConfigFile());
@@ -209,6 +251,18 @@ void Config::Load()
     else if (key == "sfx_volume") sfx_volume = std::atoi(val.c_str());
     else if (key == "fast_boot") fast_boot = b;
     else if (key == "prompt_style") prompt_style = val;
+    else if (key.rfind("key_", 0) == 0 || key.rfind("pad_", 0) == 0)
+    {
+      const int idx = std::atoi(key.c_str() + 4);
+      const int v = std::atoi(val.c_str());
+      if (idx < 0 || idx >= kPsButtons)
+        continue;
+      if (key[0] == 'k' && v >= 0 && v < SDL_NUM_SCANCODES)
+        key_bind[idx] = v;
+      else if (key[0] == 'p' && v >= -1 &&
+               (v < SDL_CONTROLLER_BUTTON_MAX || (v >= kPadAxisBase && v < kPadAxisBase + SDL_CONTROLLER_AXIS_MAX)))
+        pad_bind[idx] = v;
+    }
   }
   // 3x provoca texto ilegible y artefactos en Tenchu 2 (fallo del núcleo al copiar VRAM escalada).
   if (resolution_scale == 3) resolution_scale = 4;
@@ -238,4 +292,8 @@ void Config::Save() const
   out << "sfx_volume=" << sfx_volume << "\n";
   out << "fast_boot=" << fast_boot << "\n";
   out << "prompt_style=" << prompt_style << "\n";
+  for (int i = 0; i < kPsButtons; i++)
+    out << "key_" << i << "=" << key_bind[i] << "\n";
+  for (int i = 0; i < kPsButtons; i++)
+    out << "pad_" << i << "=" << pad_bind[i] << "\n";
 }
