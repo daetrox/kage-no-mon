@@ -32,8 +32,9 @@ abres el programa, pulsas **JUGAR** y estás dentro. Nada de ventanas de emulado
 ni mensajes extraños.
 
 > [!IMPORTANT]
-> **No incluye el juego ni la BIOS de la consola.** Necesitas tu propia copia de *Tenchu 2*
-> (imagen del disco) y la BIOS de tu PlayStation. Así el proyecto es 100 % legal y libre.
+> **No incluye el juego.** Necesitas tu propia copia de *Tenchu 2* (imagen del disco).
+> La BIOS no hace falta: viene integrada **OpenBIOS**, una BIOS libre. Si lo prefieres, puedes
+> usar la de tu propia consola.
 
 ---
 
@@ -91,16 +92,16 @@ Entra en **[Releases](../../releases/latest)** y descarga el archivo `KageNoMon-
 última compilación correcta ✅ y descarga el AppImage desde *Artifacts* (requiere iniciar sesión en GitHub).</sub>
 
 ### 2️⃣ Prepara una carpeta
-Crea una carpeta donde quieras y deja dentro el AppImage, tu BIOS y tu disco así:
+Crea una carpeta donde quieras y deja dentro el AppImage y tu disco así:
 
 ```
 📁 Kage no Mon/
 ├── 🥷 KageNoMon-x86_64.AppImage
-├── 📁 bios/
-│   └── scph5502.bin          ← BIOS de tu consola (PAL: SCPH-5502, USA: SCPH-5501…)
-└── 📁 game/
-    ├── Tenchu 2 (…).cue      ← imagen de tu disco (.cue + .bin, o .chd)
-    └── Tenchu 2 (…).bin
+├── 📁 game/
+│   ├── Tenchu 2 (…).cue      ← imagen de tu disco (.cue + .bin, o .chd)
+│   └── Tenchu 2 (…).bin
+└── 📁 bios/                  ← (opcional) BIOS de tu consola, si no quieres usar OpenBIOS
+    └── scph5502.bin
 ```
 
 ### 3️⃣ ¡A jugar!
@@ -145,10 +146,12 @@ consigues se guardan en tu equipo y no se envían a RetroAchievements.</sub>
 ## ❓ Preguntas frecuentes
 
 <details>
-<summary><b>¿Por qué no viene con el juego o la BIOS?</b></summary>
+<summary><b>¿Por qué no viene con el juego? ¿Y la BIOS?</b></summary>
 
-Porque tienen derechos de autor de sus dueños. Cada persona debe usar su propia copia del disco
-y la BIOS de su propia consola. El launcher, su arte, su música y su código sí son libres.
+El juego tiene derechos de autor de sus dueños: cada persona debe usar su propia copia.
+En lugar de la BIOS de Sony se incluye **OpenBIOS**, una BIOS libre (MIT) que funciona con este
+juego. Si quieres la original, copia la de tu consola en `bios/` y elígela en
+**OPCIONES › ISO y BIOS** (o usa *Cargar BIOS nueva…*).
 </details>
 
 <details>
@@ -213,6 +216,7 @@ Para retocar el arte en vivo, edita `assets/shaders/*.frag` con el launcher abie
 
 - 🥷 **Kage no Mon** — software libre bajo **GPL-3.0**, sin fines de lucro.
 - 🎮 **[SwanStation](https://github.com/libretro/swanstation)** — núcleo de emulación (GPL-3.0).
+- 🧩 **[OpenBIOS](https://github.com/pcsx-redux/nugget)** — BIOS libre de PCSX-Redux (MIT), integrada en el núcleo.
 - 🏆 **[rcheevos](https://github.com/RetroAchievements/rcheevos)** — logros (MIT) · datos de [RetroAchievements](https://retroachievements.org).
 - 🖥️ **Parche 16:9** — El_Patas y PeterDelta, de la base de datos [chtdb](https://github.com/duckstation/chtdb).
 - 🧱 **[SDL2](https://libsdl.org)** (zlib) · **[stb](https://github.com/nothings/stb)** (dominio público).

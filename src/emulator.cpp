@@ -13,6 +13,12 @@
 
 std::string ReadDiscSerialCached(const std::string& path);
 
+// ¿El usuario eligió una BIOS propia (y sigue existiendo)? Si no, se usa OpenBIOS.
+static bool UsesCustomBios(const Config& cfg)
+{
+  return !cfg.bios_file.empty() && Paths::FileExists(Paths::BiosDir() + "/" + cfg.bios_file);
+}
+
 // --- Símbolos del core -----------------------------------------------------------------------
 
 namespace {
@@ -377,18 +383,13 @@ void Emulator::BuildOptions(const Config& cfg)
   auto opt = [](const char* key, const std::string& value) { g_options[key] = value; };
   auto flag = [](bool b) { return std::string(b ? "true" : "false"); };
 
-  // BIOS originales en <exe>/bios. Si el nombre no existe, el núcleo busca en la carpeta la BIOS
+  // BIOS: por defecto OpenBIOS (libre, integrada en el núcleo). Se usa cuando la carpeta "system"
+  // no contiene ninguna BIOS válida; si el usuario elige una de bios/, se usa para cualquier región.
   // de la región correcta identificándola por su hash.
-  opt("swanstation_BIOS_PathNTSCJ", "scph5500.bin");
-  opt("swanstation_BIOS_PathNTSCU", "scph5501.bin");
-  opt("swanstation_BIOS_PathPAL", "scph5502.bin");
-  // BIOS elegida a mano en Opciones: se usa para cualquier región.
-  if (!cfg.bios_file.empty() && Paths::FileExists(Paths::BiosDir() + "/" + cfg.bios_file))
-  {
-    opt("swanstation_BIOS_PathNTSCJ", cfg.bios_file);
-    opt("swanstation_BIOS_PathNTSCU", cfg.bios_file);
-    opt("swanstation_BIOS_PathPAL", cfg.bios_file);
-  }
+  const std::string bios = UsesCustomBios(cfg) ? cfg.bios_file : "openbios.bin";
+  opt("swanstation_BIOS_PathNTSCJ", bios);
+  opt("swanstation_BIOS_PathNTSCU", bios);
+  opt("swanstation_BIOS_PathPAL", bios);
   opt("swanstation_BIOS_PatchFastBoot", flag(cfg.fast_boot));
 
   opt("swanstation_GPU_Renderer", cfg.hardware_renderer ? "OpenGL" : "Software");
@@ -443,13 +444,9 @@ bool Emulator::Start(const Config& cfg, SDL_Window* window, SDL_GLContext ui_con
 
   Paths::MakeDirs(Paths::SavesDir());
   Paths::MakeDirs(Paths::StatesDir());
-  m_system_dir = Paths::BiosDir();
-  if (Paths::FindBiosFiles().empty())
-  {
-    *error = "No hay ninguna BIOS de PlayStation en:\n" + m_system_dir +
-             "\n\nCopia ahí la BIOS de tu consola (SCPH-5502 para PAL,\nSCPH-5501 para EE. UU., SCPH-5500 para Japón).";
-    return false;
-  }
+  // Con OpenBIOS, la carpeta "system" es una vacía: el núcleo no encuentra BIOS y usa la integrada.
+  m_system_dir = UsesCustomBios(cfg) ? Paths::BiosDir() : Paths::DataDir() + "/system/openbios";
+  Paths::MakeDirs(m_system_dir);
 
   if (!LoadCore(error))
     return false;

@@ -900,7 +900,7 @@ void App::OpenOptionPage(int page)
   m_opt_sel = 0;
 }
 
-// Recorre "Automática" y las BIOS cargadas en bios/.
+// Recorre OpenBIOS (valor vacío) y las BIOS cargadas en bios/.
 void App::CycleBios(int dir)
 {
   std::vector<std::string> list = {""};
@@ -2169,11 +2169,9 @@ void App::RenderOptions()
         return {"Imagen del juego", m_cfg.game_path.empty() ? "(sin seleccionar)" : BaseName(m_cfg.game_path)};
       case OPT_BIOS:
       {
-        const auto files = Paths::FindBiosFiles();
-        if (files.empty())
-          return {"BIOS", "(ninguna cargada)", false, false};
+        const bool has_files = !Paths::FindBiosFiles().empty();
         const bool chosen = !m_cfg.bios_file.empty() && Paths::FileExists(Paths::BiosDir() + "/" + m_cfg.bios_file);
-        return {"BIOS", chosen ? BiosLabel(m_cfg.bios_file) : "Automática (según la región)", true, true};
+        return {"BIOS", chosen ? BiosLabel(m_cfg.bios_file) : "OpenBIOS (libre, integrada)", true, has_files};
       }
       case OPT_BIOS_LOAD: return {"Cargar BIOS nueva…", ""};
       case OPT_FASTBOOT: return {"Arranque rápido", yesno(m_cfg.fast_boot), true, true};
@@ -2264,7 +2262,10 @@ void App::RenderOptions()
   switch (rows[m_opt_sel])
   {
     case OPT_GAME: help = "Tu copia del disco (.cue, .bin, .chd…). La carpeta game/ del launcher se detecta sola."; break;
-    case OPT_BIOS: help = "Elige entre las BIOS de la carpeta bios/. «Automática» usa la de la región del disco."; break;
+    case OPT_BIOS:
+      help = "OpenBIOS es libre y viene integrada. Si un juego da problemas, carga la BIOS de tu consola y elígela "
+             "aquí.";
+      break;
     case OPT_BIOS_LOAD: help = "Copia una BIOS (archivo de 512 KB) a la carpeta bios/ y la deja elegida."; break;
     case OPT_FASTBOOT: help = "Salta la animación de arranque de la consola."; break;
     case OPT_RENDERER: help = "OpenGL permite alta resolución. Software es el más fiel al hardware original."; break;
