@@ -1,6 +1,7 @@
 #include "achievements.h"
 #include "config.h"
 #include "json.h"
+#include "translate.h"
 
 #include <SDL.h>
 #include <algorithm>
@@ -157,8 +158,9 @@ bool Achievements::LoadCache()
       continue;
     Achievement ach;
     ach.id = static_cast<uint32_t>(a["ID"].AsNumber());
-    ach.title = a["Title"].AsString();
-    ach.description = a["Description"].AsString();
+    // Se muestran en español: el texto descargado se traduce aquí, en el propio equipo.
+    ach.title = TranslateAchievementTitle(a["Title"].AsString());
+    ach.description = TranslateAchievementDescription(a["Description"].AsString());
     ach.badge = a["BadgeName"].AsString();
     ach.memaddr = a["MemAddr"].AsString();
     ach.author = a["Author"].AsString();
