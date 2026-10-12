@@ -34,7 +34,7 @@ extern "C" {
 
 namespace {
 
-constexpr const char* kVersion = "v0.2";
+constexpr const char* kVersion = "v0.2.0";
 constexpr float kImgW = 1536.0f;
 constexpr float kImgH = 1024.0f;
 constexpr float kTitleH = 36.0f;
@@ -2129,7 +2129,7 @@ void App::RenderOptionCategories()
   // Créditos y licencias.
   const float cx = m_w - IS(28);
   const Color cc = {0.8f, 0.78f, 0.76f, 0.8f};
-  m_r.Text(m_r.ui, std::string("Tenshu 2 Launcher ") + kVersion + " · software libre (GPL-3.0) · sin fines de lucro",
+  m_r.Text(m_r.ui, std::string("Kage no Mon ") + kVersion + " · software libre (GPL-3.0) · sin fines de lucro",
            cx, m_h - IS(150), IS(19), cc, Align::Right);
   m_r.Text(m_r.ui, "Núcleo: SwanStation (GPL-3.0) · Logros: rcheevos (MIT) / RetroAchievements", cx, m_h - IS(124),
            IS(19), cc, Align::Right);
