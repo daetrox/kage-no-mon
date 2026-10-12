@@ -33,6 +33,7 @@ std::string ConfigDir();    // ~/.config/tenshu2
 std::string DataDir();      // ~/.local/share/tenshu2
 std::string SavesDir();     // tarjetas de memoria
 std::string StatesDir();    // estados guardados
+std::string UserDir();      // junto al ejecutable, o junto al .AppImage si se ejecuta así
 std::string BiosDir();      // <exe>/bios: BIOS originales del usuario (no se distribuyen)
 std::string GameDir();      // <exe>/game: imagen del juego del usuario (no se distribuye)
 // Busca BIOS (archivos de 512 KB) en BiosDir(). Devuelve sus nombres.

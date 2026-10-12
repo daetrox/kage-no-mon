@@ -54,8 +54,22 @@ std::string DataDir()
 
 std::string SavesDir() { return DataDir() + "/memcards"; }
 std::string StatesDir() { return DataDir() + "/states"; }
-std::string BiosDir() { return ExeDir() + "/bios"; }
-std::string GameDir() { return ExeDir() + "/game"; }
+// Carpeta con los archivos del usuario (bios/, game/). Dentro de un AppImage el programa vive en
+// un sistema de archivos de sólo lectura, así que se usa la carpeta donde está el .AppImage.
+std::string UserDir()
+{
+  if (const char* appimage = std::getenv("APPIMAGE"))
+  {
+    std::string p = appimage;
+    const size_t s = p.find_last_of('/');
+    if (s != std::string::npos)
+      return p.substr(0, s);
+  }
+  return ExeDir();
+}
+
+std::string BiosDir() { return UserDir() + "/bios"; }
+std::string GameDir() { return UserDir() + "/game"; }
 
 std::vector<std::string> FindBiosFiles()
 {

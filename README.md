@@ -29,6 +29,25 @@ Requisitos: `git`, `cmake`, `ninja`, `g++` y las cabeceras de Wayland/OpenGL/Pul
 ./build.sh --package   # además genera tenshu2-linux-x86_64.tar.gz
 ```
 
+## Descargar (AppImage)
+
+En la pestaña **Releases** del repositorio hay un AppImage listo para cualquier distribución
+moderna de Linux x86_64. Junto al archivo `.AppImage` crea:
+
+```
+Tenshu2-vX.Y-x86_64.AppImage
+bios/   ← BIOS de tu consola (scph5502.bin, scph5501.bin…)
+game/   ← imagen de tu disco (.cue + .bin, o .chd)
+```
+
+y ejecútalo (`chmod +x Tenshu2-*.AppImage && ./Tenshu2-*.AppImage`).
+
+### Compilación automática
+
+`packaging/appimage.yml` es el flujo de GitHub Actions que compila todo y genera el AppImage
+(como artefacto en cada cambio y como Release al crear una etiqueta `vX.Y`). Para activarlo,
+cópialo a `.github/workflows/appimage.yml`. En local: `./build.sh && packaging/make_appimage.sh`.
+
 ## Usar
 
 ```sh

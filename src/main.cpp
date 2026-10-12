@@ -115,7 +115,7 @@ void PopUtf8(std::string& s)
 // Busca la imagen del disco: primero en <exe>/game, después junto al ejecutable y carpetas superiores.
 std::string AutoDetectGame()
 {
-  std::vector<std::string> dirs = {Paths::GameDir()};
+  std::vector<std::string> dirs = {Paths::GameDir(), Paths::UserDir()};
   std::string d = Paths::ExeDir();
   for (int i = 0; i < 4; i++)
   {
