@@ -38,8 +38,9 @@ Requisitos: `git`, `cmake`, `ninja`, `g++` y las cabeceras de Wayland/OpenGL/Pul
 - **Juego:** copia la imagen (`.cue/.bin/.chd`) en la carpeta `game/` junto al ejecutable; se
   detecta sola. También puedes elegirla en *OPCIONES › Imagen del juego* o
   arrastrar el archivo sobre la ventana.
-- **BIOS:** copia la BIOS de tu consola en `bios/` (SCPH-5502 PAL, SCPH-5501 USA, SCPH-5500 JAP).
-  El núcleo elige la correcta según la región del disco. También puedes arrastrarla a la ventana.
+- **BIOS:** copia la BIOS de tu consola en `bios/` (SCPH-5502 PAL, SCPH-5501 USA, SCPH-5500 JAP),
+  o usa *OPCIONES › ISO y BIOS › Cargar BIOS nueva…*. En esa misma página se elige qué BIOS usar
+  ("Automática" toma la de la región del disco). También puedes arrastrarla a la ventana.
 - **Logros:** en *LOGROS* inicia sesión una vez con tu cuenta de RetroAchievements; se descargan
   el set y las insignias a `~/.local/share/tenshu2/achievements/`. A partir de ahí funcionan sin
   conexión: se evalúan en local y los desbloqueos se guardan en este equipo (no se envían a RA).

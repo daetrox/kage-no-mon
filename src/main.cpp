@@ -2243,7 +2243,7 @@ void App::RenderOptions()
       }
       else
       {
-        FitText(m_r.ui, r.value, IX(vx0), IY(ty + 2), IS(vx1 + 22 - vx0), IS(27), vc, Align::Right, sel,
+        FitText(m_r.ui, r.value, IX(vx0 - 20), IY(ty + 2), IS(vx1 + 6 - vx0), IS(27), vc, Align::Right, sel,
                 m_opt_page * 100 + static_cast<int>(i) * 2 + 1);
       }
     }
