@@ -161,6 +161,7 @@ bool Achievements::LoadCache()
     ach.description = a["Description"].AsString();
     ach.badge = a["BadgeName"].AsString();
     ach.memaddr = a["MemAddr"].AsString();
+    ach.author = a["Author"].AsString();
     ach.points = static_cast<int>(a["Points"].AsNumber());
     m_list.push_back(std::move(ach));
   }
@@ -207,6 +208,26 @@ void Achievements::ResetUnlocks()
     a.unlock_time = 0;
   }
   SaveUnlocks();
+}
+
+std::vector<std::string> Achievements::Authors() const
+{
+  std::vector<std::pair<std::string, int>> count;
+  for (const Achievement& a : m_list)
+  {
+    if (a.author.empty())
+      continue;
+    auto it = std::find_if(count.begin(), count.end(), [&](const auto& c) { return c.first == a.author; });
+    if (it == count.end())
+      count.emplace_back(a.author, 1);
+    else
+      it->second++;
+  }
+  std::stable_sort(count.begin(), count.end(), [](const auto& x, const auto& y) { return x.second > y.second; });
+  std::vector<std::string> out;
+  for (const auto& c : count)
+    out.push_back(c.first);
+  return out;
 }
 
 Achievement* Achievements::Find(uint32_t id)

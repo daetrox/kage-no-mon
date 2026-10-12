@@ -225,6 +225,7 @@ enum class Screen
   Options,
   Controls,
   Remap,
+  Credits,
   Achievements,
   Game,
 };
@@ -234,6 +235,7 @@ enum class Modal
   None,
   Dialog,
   PlayChoice,
+  ConfirmReset, // confirmar el reinicio de los logros
 };
 
 enum class PromptStyle
@@ -291,12 +293,14 @@ struct Popup
   float time;
 };
 
-// Rectángulos de los botones del menú en la imagen (JUGAR, LOGROS, OPCIONES, SALIR).
-const Rect kMenuSlots[4] = {
-  {66, 388, 462, 90},
-  {72, 488, 428, 84},
-  {72, 586, 424, 84},
-  {72, 686, 424, 88},
+// Botones del menú (JUGAR, LOGROS, OPCIONES, CRÉDITOS, SALIR), en píxeles de la ilustración.
+constexpr int kMenuItems = 5;
+const Rect kMenuSlots[kMenuItems] = {
+  {66, 388, 462, 86},
+  {72, 478, 428, 82},
+  {72, 566, 424, 82},
+  {72, 654, 424, 82},
+  {72, 742, 424, 82},
 };
 
 enum OptRow
@@ -479,6 +483,8 @@ private:
   void RenderOptions();
   void RenderOptionCategories();
   void RenderRemap();
+  void RenderCredits();
+  void RenderConfirmReset();
   void AssignBinding(int retro_id, int value);
   void RenderControls();
   void RenderAchievements();
@@ -597,6 +603,8 @@ private:
   std::string m_ach_game_path;
   std::string m_ws_serial_path;
   bool m_ws_available = false;
+  float m_credits_scroll = 0, m_credits_target = 0;
+  float m_credits_height = 0; // alto total del texto de créditos (px de la ilustración)
   int m_remap_device = 0;   // 0 teclado, 1 mando
   int m_remap_sel = 0;      // 0..15 botones, 16 restaurar, 17 volver
   int m_remap_wait = -1;    // botón (RETRO_DEVICE_ID_JOYPAD_*) que espera una tecla/botón nuevo
@@ -799,7 +807,7 @@ void App::ShowDialog(const std::string& text)
 
 void App::ActivateMenu(int index)
 {
-  if (index == 1 || index == 2)
+  if (index >= 1 && index <= 3)
     m_audio.Play(Sfx::Select);
   switch (index)
   {
@@ -825,7 +833,11 @@ void App::ActivateMenu(int index)
       m_opt_page = -1;
       m_opt_sel = 0;
       break;
-    case 3: RequestQuit(); break;
+    case 3:
+      m_screen = Screen::Credits;
+      m_credits_scroll = m_credits_target = -60; // empieza un poco más abajo y sube
+      break;
+    case 4: RequestQuit(); break;
   }
 }
 
@@ -1164,9 +1176,16 @@ void App::NavigateImpl(int dy, int dx)
       m_choice_sel = (m_choice_sel + dy + 3) % 3;
     return;
   }
+  if (m_modal == Modal::ConfirmReset)
+  {
+    if (dy || dx)
+      m_choice_sel = 1 - m_choice_sel;
+    return;
+  }
   switch (m_screen)
   {
-    case Screen::Menu: m_sel = (m_sel + dy + 4) % 4; break;
+    case Screen::Menu: m_sel = (m_sel + dy + kMenuItems) % kMenuItems; break;
+    case Screen::Credits: m_credits_target += dy * 120.0f; break;
     case Screen::Options:
     {
       const int n = m_opt_page < 0 ? kOptCategoryCount + 1 : static_cast<int>(OptPageRows(m_opt_page).size());
@@ -1184,8 +1203,9 @@ void App::NavigateImpl(int dy, int dx)
       }
       else if (m_ach.GetState() == Achievements::State::Ready && dy)
       {
+        // La última fila (índice n) es "Reiniciar mis logros".
         const int n = static_cast<int>(m_ach.List().size());
-        m_ach_sel = std::clamp(m_ach_sel + dy, 0, std::max(0, n - 1));
+        m_ach_sel = std::clamp(m_ach_sel + dy, 0, n);
       }
       break;
     case Screen::Remap:
@@ -1224,6 +1244,21 @@ void App::Accept()
     m_modal = Modal::None;
     return;
   }
+  if (m_modal == Modal::ConfirmReset)
+  {
+    m_modal = Modal::None;
+    if (m_choice_sel == 0)
+    {
+      m_ach.ResetUnlocks();
+      m_audio.Play(Sfx::Close);
+      Toast("Logros reiniciados");
+    }
+    else
+    {
+      m_audio.Play(Sfx::Cancel);
+    }
+    return;
+  }
   if (m_modal == Modal::PlayChoice)
   {
     if (m_choice_sel == 0)
@@ -1260,6 +1295,13 @@ void App::Accept()
           m_login_focus++;
         else
           StartLogin();
+      }
+      else if (m_ach.GetState() == Achievements::State::Ready &&
+               m_ach_sel == static_cast<int>(m_ach.List().size()))
+      {
+        m_audio.Play(Sfx::Select);
+        m_modal = Modal::ConfirmReset;
+        m_choice_sel = 1; // por seguridad, empieza en "Cancelar"
       }
       break;
     case Screen::Remap:
@@ -1337,6 +1379,10 @@ void App::Back()
     case Screen::Achievements:
       m_screen = Screen::Menu;
       m_sel = 1;
+      break;
+    case Screen::Credits:
+      m_screen = Screen::Menu;
+      m_sel = 3;
       break;
     case Screen::Remap:
       if (m_remap_wait >= 0)
@@ -1657,8 +1703,10 @@ void App::HandleEvent(const SDL_Event& e)
       if (m_screen == Screen::Achievements)
       {
         const int n = static_cast<int>(m_ach.List().size());
-        m_ach_sel = std::clamp(m_ach_sel - e.wheel.y, 0, std::max(0, n - 1));
+        m_ach_sel = std::clamp(m_ach_sel - e.wheel.y, 0, n);
       }
+      else if (m_screen == Screen::Credits)
+        m_credits_target -= e.wheel.y * 90.0f;
       else if (m_screen == Screen::Options)
         Navigate(e.wheel.y > 0 ? -1 : 1, 0);
       break;
@@ -1812,7 +1860,7 @@ void App::Update(float dt)
   }
 
   int active = -1;
-  if (m_modal == Modal::PlayChoice)
+  if (m_modal == Modal::PlayChoice || m_modal == Modal::ConfirmReset)
     active = m_choice_sel;
   else if (m_screen == Screen::Menu)
     active = m_sel;
@@ -1837,9 +1885,19 @@ void App::Update(float dt)
       m_ach_scroll_target = sel_y;
     if (sel_y + row_h > m_ach_scroll_target + view_h)
       m_ach_scroll_target = sel_y + row_h - view_h;
-    const float max_scroll = std::max(0.0f, m_ach.List().size() * row_h - view_h);
+    const float max_scroll = std::max(0.0f, (m_ach.List().size() + 1) * row_h - view_h);
     m_ach_scroll_target = std::clamp(m_ach_scroll_target, 0.0f, max_scroll);
     m_ach_scroll += (m_ach_scroll_target - m_ach_scroll) * std::min(1.0f, dt * 12.0f);
+  }
+
+  // Créditos: avanzan solos despacio; las flechas o la rueda los mueven a mano.
+  if (m_screen == Screen::Credits)
+  {
+    m_credits_target += dt * 32.0f;
+    if (m_credits_height > 0 && m_credits_target > m_credits_height)
+      m_credits_target = -60; // al terminar, vuelve a empezar
+    m_credits_target = std::max(m_credits_target, -60.0f);
+    m_credits_scroll += (m_credits_target - m_credits_scroll) * std::min(1.0f, dt * 8.0f);
   }
 
   if (m_screen == Screen::Game)
@@ -1905,11 +1963,14 @@ void App::Render()
       case Screen::Options: RenderOptions(); break;
       case Screen::Controls: RenderControls(); break;
       case Screen::Remap: RenderRemap(); break;
+      case Screen::Credits: RenderCredits(); break;
       case Screen::Achievements: RenderAchievements(); break;
       default: break;
     }
     if (m_modal == Modal::PlayChoice)
       RenderPlayChoice();
+    if (m_modal == Modal::ConfirmReset)
+      RenderConfirmReset();
     RenderTitleBar();
     RenderTransition();
   }
@@ -2282,15 +2343,23 @@ void App::RenderMenu()
   }
   m_r.Sprite(m_tagline, IX(60), IY(860), IS(420), IS(152), {1, 1, 1, tag_a});
 
-  const char* labels[4] = {"JUGAR", "LOGROS", "OPCIONES", "SALIR"};
-  const Texture* icons[4] = {&m_ic_play, &m_ic_ach, &m_ic_opt, &m_ic_quit};
-  for (int i = 0; i < 4; i++)
+  const char* labels[kMenuItems] = {"JUGAR", "LOGROS", "OPCIONES", "CRÉDITOS", "SALIR"};
+  const Texture* icons[kMenuItems] = {&m_ic_play, &m_ic_ach, &m_ic_opt, nullptr, &m_ic_quit};
+  for (int i = 0; i < kMenuItems; i++)
   {
     float e = EaseOut((T - 1.35f - i * 0.09f) / 0.38f);
     if (O >= 0)
       e *= 1.0f - EaseInOut((O - i * 0.05f) / 0.3f);
-    DrawMenuButton(kMenuSlots[i], labels[i], icons[i], m_modal == Modal::None ? m_sel_anim[i] : 0.0f, 46, true, e,
-                   -(1.0f - e) * IS(420));
+    const float sel = m_modal == Modal::None ? m_sel_anim[i] : 0.0f;
+    DrawMenuButton(kMenuSlots[i], labels[i], icons[i], sel, 44, true, e, -(1.0f - e) * IS(420));
+    if (!icons[i] && e > 0.001f)
+    {
+      // CRÉDITOS: pergamino dibujado en el hueco del icono.
+      const Rect r = IR(kMenuSlots[i]);
+      const float is = IS(50);
+      m_r.DrawIcon(Icon::Scroll, r.x - (1.0f - e) * IS(420) + IS(52), r.y + r.h / 2 - is / 2, is,
+                   sel > 0.5f ? Color{1, 1, 1, e} : Color{0.8f, 0.78f, 0.76f, 0.95f * e});
+    }
     Hot(IR(kMenuSlots[i]), 0, i, [this, i](float, float) {
       m_sel = i;
       ActivateMenu(i);
@@ -2676,6 +2745,136 @@ void App::RenderRemap()
   RenderHints({{PsButton::Accept, "Cambiar"}, {PsButton::Back, "Volver"}}, m_w - IS(28), m_h - IS(58));
 }
 
+void App::RenderCredits()
+{
+  DimScreen(0.55f);
+  const float px = 40, py = 56, pw = 1100, ph = 950;
+  Panel(px, py, pw, ph);
+  m_r.Text(m_r.brush, "CRÉDITOS", IX(px + 44), IY(py + 20), IS(56), kWhite);
+  m_r.TextCentered(m_r.kanji, "忍", IX(px + pw - 80), IY(py + 66), IS(84), {0.6f, 0.04f, 0.04f, 0.45f});
+
+  struct Line
+  {
+    int kind; // 0 sección, 1 nombre + función, 2 título, 3 nota
+    std::string a, b;
+  };
+  std::vector<Line> lines = {
+    {2, "KAGE NO MON", ""},
+    {3, std::string("La Puerta de las Sombras  ·  ") + kVersion, ""},
+    {0, "PROYECTO", ""},
+    {1, "daetrox", "Idea, dirección, diseño e ilustración del launcher"},
+    {1, "Claude (Anthropic)", "Programación, en colaboración con daetrox"},
+    {1, "Composición original", "Música y efectos de sonido (koto, shakuhachi y taiko)"},
+    {0, "EMULACIÓN", ""},
+    {1, "SwanStation", "Núcleo de PlayStation para libretro, derivado de DuckStation  ·  GPL-3.0"},
+    {1, "Connor McLaughlin (stenzek) y colaboradores", "Autores de DuckStation, base de SwanStation"},
+    {1, "OpenBIOS", "BIOS libre de PCSX-Redux  ·  autores de PCSX-Redux  ·  MIT"},
+    {1, "libretro", "API de núcleos de emulación  ·  equipo de libretro"},
+    {0, "LOGROS", ""},
+    {1, "RetroAchievements.org", "Plataforma y base de datos de logros"},
+    {1, "rcheevos", "Biblioteca de logros de RetroAchievements  ·  MIT"},
+  };
+  if (m_ach.GetState() == Achievements::State::Ready)
+  {
+    std::string authors;
+    for (const std::string& a : m_ach.Authors())
+      authors += (authors.empty() ? "" : ", ") + a;
+    if (!authors.empty())
+      lines.push_back({1, authors, "Autoría del set de logros de " + m_ach.GameTitle()});
+  }
+  const std::vector<Line> rest = {
+    {0, "PANTALLA PANORÁMICA", ""},
+    {1, "El_Patas y PeterDelta", "Parche 16:9 nativo  ·  base de datos chtdb de DuckStation"},
+    {0, "BIBLIOTECAS", ""},
+    {1, "SDL2", "Sam Lantinga y colaboradores  ·  zlib"},
+    {1, "stb_truetype, stb_image, stb_vorbis", "Sean Barrett  ·  dominio público"},
+    {0, "TIPOGRAFÍAS", ""},
+    {1, "Permanent Marker", "Font Diner  ·  Apache 2.0"},
+    {1, "Oswald", "The Oswald Project Authors  ·  SIL OFL 1.1"},
+    {1, "Shojumaru", "Astigmatic (Brian J. Bonislawsky)  ·  SIL OFL 1.1"},
+    {1, "Kaushan Script", "Pablo Impallari e Igino Marini  ·  SIL OFL 1.1"},
+    {1, "Yuji Syuku", "The Yuji Project Authors (Kinuta Font Factory)  ·  SIL OFL 1.1"},
+    {0, "CON RESPETO A", ""},
+    {1, "Acquire y Activision", "Creadores de Tenchu 2: Birth of the Stealth Assassins (2000)"},
+    {3, "Tenchu es una marca registrada de sus respectivos propietarios.", ""},
+    {3, "Este proyecto no está afiliado a ellos.", ""},
+    {3, "Software libre (GPL-3.0)  ·  sin fines de lucro", ""},
+  };
+  lines.insert(lines.end(), rest.begin(), rest.end());
+
+  // Texto centrado que sube; se recorta al interior del panel.
+  const float cx = px + pw / 2, top = py + 110, bottom = py + ph - 80;
+  m_r.SetClip(IX(px + 10), IY(top), IS(pw - 20), IS(bottom - top));
+  float y = top + 40 - m_credits_scroll;
+  for (const Line& l : lines)
+  {
+    switch (l.kind)
+    {
+      case 0:
+        y += 40;
+        m_r.Text(m_r.brush, l.a, IX(cx), IY(y), IS(30), kGold, Align::Center);
+        m_r.Rect(IX(cx - 60), IY(y + 52), IS(120), IS(2), UiMode::Solid, {0.75f, 0.1f, 0.06f, 0.8f});
+        y += 74;
+        break;
+      case 1:
+        m_r.Text(m_r.ui, Truncate(m_r.ui, l.a, IS(29), IS(pw - 120)), IX(cx), IY(y), IS(29), kWhite, Align::Center);
+        m_r.Text(m_r.ui, Truncate(m_r.ui, l.b, IS(21), IS(pw - 120)), IX(cx), IY(y + 40), IS(21), kGrey,
+                 Align::Center);
+        y += 86;
+        break;
+      case 2:
+        m_r.Text(m_r.brush, l.a, IX(cx), IY(y), IS(54), kWhite, Align::Center);
+        y += 80;
+        break;
+      default:
+        m_r.Text(m_r.ui, l.a, IX(cx), IY(y), IS(21), kDim, Align::Center);
+        y += 34;
+        break;
+    }
+  }
+  m_r.ClearClip();
+  m_credits_height = y + m_credits_scroll - top;
+  // Fundidos arriba y abajo para que el texto entre y salga suavemente.
+  for (int k = 0; k < 12; k++)
+  {
+    const float a = 0.9f * (1.0f - k / 12.0f);
+    m_r.Rect(IX(px + 10), IY(top + k * 4), IS(pw - 20), IS(4), UiMode::Solid, {0.035f, 0.025f, 0.025f, a});
+    m_r.Rect(IX(px + 10), IY(bottom - (k + 1) * 4), IS(pw - 20), IS(4), UiMode::Solid,
+             {0.035f, 0.025f, 0.025f, a});
+  }
+  RenderHints({{PsButton::Back, "Volver"}}, IX(px + pw - 30), IY(py + ph - 64));
+}
+
+void App::RenderConfirmReset()
+{
+  DimScreen(0.6f);
+  const float x = 450, y = 300, w = 680, h = 470;
+  Panel(x, y, w, h);
+  m_r.Text(m_r.brush, "REINICIAR LOGROS", IX(x + 44), IY(y + 24), IS(44), kWhite);
+  const int n = m_ach.EarnedCount();
+  const std::string msg = (n == 1 ? std::string("Se borrará el logro desbloqueado")
+                                  : "Se borrarán los " + std::to_string(n) + " logros desbloqueados") +
+                          " en este equipo. No se puede deshacer.";
+  float ty = y + 96;
+  for (const std::string& line : Wrap(m_r.ui, msg, IS(25), IS(w - 90)))
+  {
+    m_r.Text(m_r.ui, line, IX(x + 46), IY(ty), IS(25), kGrey);
+    ty += 34;
+  }
+  const char* labels[2] = {"REINICIAR", "CANCELAR"};
+  const Texture* icons[2] = {&m_ic_ach, &m_ic_quit};
+  for (int i = 0; i < 2; i++)
+  {
+    const Rect slot = {x + 100, y + 200 + i * 100.0f, 462, 86};
+    DrawMenuButton(slot, labels[i], icons[i], m_sel_anim[i], 34, true);
+    Hot(IR(slot), 3, i, [this, i](float, float) {
+      m_choice_sel = i;
+      Accept();
+    });
+  }
+  RenderHints({{PsButton::Accept, "Aceptar"}, {PsButton::Back, "Cancelar"}}, IX(x + w - 30), IY(y + h + 16));
+}
+
 void App::RenderControls()
 {
   DimScreen(m_emu.IsRunning() ? 0.75f : 0.5f);
@@ -2738,10 +2937,12 @@ void App::RenderAchievements()
     m_r.Rect(IX(bx), IY(by), IS(bw * frac), IS(bh), UiMode::Solid, {0.85f, 0.12f, 0.08f, 1});
 
     const float top = py + 132, view_h = 700, row_h = 88;
+    // Las filas que asoman por arriba o por abajo se recortan contra el borde de la lista.
+    m_r.SetClip(IX(px + 20), IY(top), IS(pw - 40), IS(view_h));
     for (size_t i = 0; i < list.size(); i++)
     {
       const float y = top + i * row_h - m_ach_scroll;
-      if (y < top - 1 || y + row_h > top + view_h + 1)
+      if (y + row_h < top || y > top + view_h)
         continue;
       Achievement& a = list[i];
       const bool sel = static_cast<int>(i) == m_ach_sel;
@@ -2772,6 +2973,29 @@ void App::RenderAchievements()
       }
       m_r.Text(m_r.ui, when, rr.x + rr.w - IS(20), rr.y + IS(44), IS(19), kDim, Align::Right);
     }
+    // Última fila: reiniciar los logros conseguidos (pide confirmación).
+    {
+      const size_t n = list.size();
+      const float y = top + n * row_h - m_ach_scroll;
+      if (y + row_h >= top && y <= top + view_h)
+      {
+        const bool sel = static_cast<int>(n) == m_ach_sel;
+        const Rect rr = IR({px + 30, y, pw - 60, row_h - 8});
+        if (sel)
+          m_r.Sprite(m_btn_sel, rr.x - IS(8), rr.y - IS(4), rr.w + IS(16), rr.h + IS(8), {1, 1, 1, 0.95f});
+        else
+          m_r.Rect(rr.x, rr.y, rr.w, rr.h, UiMode::Solid, {0.4f, 0.03f, 0.02f, 0.25f});
+        m_r.DrawIcon(Icon::Close, rr.x + IS(30), rr.y + IS(24), IS(32), sel ? kWhite : kRed);
+        m_r.Text(m_r.ui, "Reiniciar mis logros", rr.x + IS(92), rr.y + IS(4), IS(27), sel ? kWhite : kGrey);
+        m_r.Text(m_r.ui, "Borra los logros desbloqueados en este equipo (pide confirmación).", rr.x + IS(92),
+                 rr.y + IS(42), IS(21), sel ? Color{1, 0.9f, 0.85f, 1} : kDim);
+        Hot(rr, 6, static_cast<int>(n), [this, n](float, float) {
+          m_ach_sel = static_cast<int>(n);
+          Accept();
+        });
+      }
+    }
+    m_r.ClearClip();
     m_r.Text(m_r.ui, "Los logros se desbloquean sin conexión y se guardan sólo en este equipo.", IX(px + 44),
              IY(py + ph - 58), IS(21), kDim);
     RenderHints({{PsButton::Back, "Volver"}}, IX(px + pw - 30), IY(py + ph - 64));
@@ -3076,6 +3300,19 @@ int App::Run(int argc, char** argv)
       if (screenshot_screen == "options") m_screen = Screen::Options;
       if (screenshot_screen == "controls") m_screen = Screen::Controls;
       if (screenshot_screen == "remap") m_screen = Screen::Remap;
+      if (screenshot_screen == "credits") m_screen = Screen::Credits;
+      if (const char* cs = std::getenv("TENSHU_TEST_CREDITS"))
+        m_credits_scroll = static_cast<float>(std::atof(cs));
+      if (screenshot_screen == "confirmreset")
+      {
+        m_screen = Screen::Achievements;
+        m_modal = Modal::ConfirmReset;
+      }
+      if (const char* as = std::getenv("TENSHU_TEST_ACHSEL"))
+      {
+        m_ach_sel = std::atoi(as);
+        m_ach_scroll = m_ach_scroll_target = std::max(0.0f, (m_ach_sel + 1) * 88.0f - 700.0f);
+      }
       if (const char* dev = std::getenv("TENSHU_TEST_DEVICE"))
         m_remap_device = std::atoi(dev);
       if (const char* rs = std::getenv("TENSHU_TEST_REMAPSEL"))

@@ -95,6 +95,7 @@ public:
              Align align = Align::Left, Color c2 = {0, 0, 0, 0}, float effect = 0);
   float TextWidth(const Font& font, const std::string& text, float size) const;
   // Recorte rectangular (píxeles, origen arriba-izquierda) para lo que se dibuje a continuación.
+  // Se pueden anidar: SetClip intersecta con el recorte actual y ClearClip restaura el anterior.
   void SetClip(float x, float y, float w, float h);
   void ClearClip();
   // Centra el texto en (cx, cy) usando la caja real de los glifos (útil para kanji sueltos).
@@ -118,6 +119,12 @@ private:
   int m_w = 1, m_h = 1;
   float m_time = 0;
   std::vector<float> m_scratch;
+  struct ClipRect
+  {
+    float x0, y0, x1, y1;
+  };
+  std::vector<ClipRect> m_clips;
+  void ApplyClip();
 };
 
 // Decodifica UTF-8 a códigos Unicode.

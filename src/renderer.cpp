@@ -254,6 +254,7 @@ void Renderer::BeginFrame(int width, int height, float time)
   m_w = width;
   m_h = height;
   m_time = time;
+  m_clips.clear();
   glViewport(0, 0, width, height);
   glDisable(GL_DEPTH_TEST);
   glDisable(GL_SCISSOR_TEST);
@@ -407,14 +408,37 @@ void Renderer::TextCentered(const Font& font, const std::string& text, float cx,
   Text(font, text, x, y, size, c);
 }
 
-void Renderer::SetClip(float x, float y, float w, float h)
+void Renderer::ApplyClip()
 {
+  if (m_clips.empty())
+  {
+    glDisable(GL_SCISSOR_TEST);
+    return;
+  }
+  const ClipRect& c = m_clips.back();
   glEnable(GL_SCISSOR_TEST);
-  glScissor(static_cast<GLint>(x), static_cast<GLint>(m_h - (y + h)), static_cast<GLsizei>(std::max(0.0f, w)),
-            static_cast<GLsizei>(std::max(0.0f, h)));
+  glScissor(static_cast<GLint>(c.x0), static_cast<GLint>(m_h - c.y1), static_cast<GLsizei>(std::max(0.0f, c.x1 - c.x0)),
+            static_cast<GLsizei>(std::max(0.0f, c.y1 - c.y0)));
 }
 
-void Renderer::ClearClip() { glDisable(GL_SCISSOR_TEST); }
+void Renderer::SetClip(float x, float y, float w, float h)
+{
+  ClipRect c{x, y, x + w, y + h};
+  if (!m_clips.empty())
+  {
+    const ClipRect& p = m_clips.back();
+    c = {std::max(c.x0, p.x0), std::max(c.y0, p.y0), std::min(c.x1, p.x1), std::min(c.y1, p.y1)};
+  }
+  m_clips.push_back(c);
+  ApplyClip();
+}
+
+void Renderer::ClearClip()
+{
+  if (!m_clips.empty())
+    m_clips.pop_back();
+  ApplyClip();
+}
 
 float Renderer::TextWidth(const Font& font, const std::string& text, float size) const
 {

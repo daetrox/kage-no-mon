@@ -19,6 +19,7 @@ struct Achievement
   std::string description;
   std::string badge;   // nombre de la insignia en RA
   std::string memaddr; // lógica del logro (formato rcheevos)
+  std::string author;  // autor del logro en RetroAchievements
   int points = 0;
   bool unlocked = false;
   int64_t unlock_time = 0; // epoch
@@ -54,6 +55,8 @@ public:
   int TotalPoints() const;
   void LoadIcon(Achievement& a, Renderer& r);
   void ResetUnlocks();
+  // Autores del set (de más a menos logros creados), para los créditos.
+  std::vector<std::string> Authors() const;
 
   // Sesión de juego.
   void BeginSession();

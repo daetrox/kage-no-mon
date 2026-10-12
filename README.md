@@ -142,6 +142,8 @@ chmod +x KageNoMon-*.AppImage
 2. Inicia sesión **una sola vez** con tu cuenta gratuita de [RetroAchievements](https://retroachievements.org).
 3. Se descargan los logros y sus insignias. **A partir de ahí funcionan sin internet.**
 
+Al final de la lista está **Reiniciar mis logros**, para empezar de cero (pide confirmación).
+
 <sub>🔒 Tu contraseña solo se usa para obtener un token de acceso y no se guarda. Los logros que
 consigues se guardan en tu equipo y no se envían a RetroAchievements.</sub>
 
