@@ -20,6 +20,10 @@ if [ ! -d "$TP/swanstation" ]; then
   git clone https://github.com/libretro/swanstation.git "$TP/swanstation"
   git -C "$TP/swanstation" checkout "$SWAN_COMMIT"
 fi
+# Parche de Kage no Mon (iconos de botones del juego según el mando); se aplica una sola vez.
+if ! git -C "$TP/swanstation" apply --reverse --check "$ROOT/patches/swanstation-kage-vram.patch" 2>/dev/null; then
+  git -C "$TP/swanstation" apply "$ROOT/patches/swanstation-kage-vram.patch"
+fi
 if [ ! -d "$TP/rcheevos" ]; then
   git clone --depth 1 https://github.com/RetroAchievements/rcheevos.git "$TP/rcheevos"
 fi
@@ -40,10 +44,10 @@ if [ ! -f "$TP/sdl2-install/lib/libSDL2-2.0.so.0" ]; then
 fi
 
 # --- Núcleo SwanStation ---
-if [ ! -f "$TP/build-swan/swanstation_libretro.so" ]; then
+if [ ! -f "$TP/build-swan/build.ninja" ]; then
   cmake -S "$TP/swanstation" -B "$TP/build-swan" -G Ninja -DCMAKE_BUILD_TYPE=Release
-  ninja -C "$TP/build-swan" -j"$JOBS"
 fi
+ninja -C "$TP/build-swan" -j"$JOBS" # incremental: recompila si cambia el parche
 
 # --- Launcher ---
 cmake -S "$ROOT" -B "$ROOT/build" -G Ninja -DCMAKE_BUILD_TYPE=Release

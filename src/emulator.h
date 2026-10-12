@@ -37,6 +37,11 @@ public:
   bool LoadState(const std::string& path);
   void SetVolume(int volume) { m_volume = volume; }
   void SetRumbleTarget(SDL_GameController* pad) { m_pad = pad; }
+  // Iconos de botones dentro del juego (ver game_buttons.h; vacío = originales de PS1). Se puede
+  // cambiar en plena partida: lo ya cargado se actualiza en el siguiente frame.
+  void SetButtonPatches(std::vector<uint8_t> patches);
+  // Diagnóstico: copia de la VRAM (1024x512, 16 bits).
+  bool DumpVram(const std::string& path);
   // Códigos de trucos que se aplicarán en el próximo Start().
   void SetCheats(std::vector<std::string> codes) { m_cheats = std::move(codes); }
 
@@ -67,6 +72,13 @@ private:
   void MakeUiCurrent();
 
   void* m_lib = nullptr;
+  std::vector<uint8_t> m_button_patches;
+  // Extensiones de Kage no Mon en el núcleo (opcionales).
+  void (*m_kage_watch)(uint64_t, uint64_t, uint32_t, uint32_t) = nullptr;
+  bool (*m_kage_set_patches)(const void*, size_t) = nullptr;
+  void (*m_kage_log)(const char*) = nullptr;
+  bool (*m_kage_dump)(const char*) = nullptr;
+  void (*m_kage_refresh)() = nullptr;
   bool m_core_initialized = false;
   bool m_running = false;
   bool m_paused = false;

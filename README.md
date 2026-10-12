@@ -50,6 +50,8 @@ ni mensajes extraños.
 | ✨ **Gráficos mejorados** | Hasta 5× la resolución original, texturas suavizadas (xBR) y polígonos sin temblores. |
 | 🎮 **Teclado, Xbox o PlayStation** | Los iconos de los botones cambian solos según lo que uses. |
 | ⌨️ **Controles a tu gusto** | Reasigna cada botón del teclado y del mando por separado, con restauración por defecto. |
+| 🎮 **Iconos del juego según tu mando** | Los ✕ ○ □ △ de los menús de Tenchu 2 se convierten en A/B/X/Y o en tus teclas, con tus asignaciones, al instante. |
+| 💀 **Modo hardcore** | Como en la consola: BIOS original, sin estados guardados ni trucos. Los logros conseguidos así se marcan como hardcore. |
 | 🥷 **Trucos** | Vida infinita, todas las misiones, objetos infinitos… Se activan en *Opciones › Trucos* (los logros se pausan mientras haya trucos). |
 | 🇪🇸 **Logros en español** | Las descripciones se traducen en tu equipo, con los nombres oficiales de las misiones. |
 | 📜 **Créditos** | Todas las personas y proyectos que hacen posible el launcher, con sus licencias. |
@@ -214,6 +216,7 @@ como Release al crear una etiqueta `vX.Y`.
 | Carpeta | Contenido |
 |---|---|
 | `src/` | Launcher en C++ (SDL2 + OpenGL 3.3): menús, frontend libretro, logros, audio |
+| `patches/` | Parche de SwanStation (GPL-3.0) para cambiar los iconos de botones del juego |
 | `assets/` | Fuentes, shaders, imágenes de la interfaz y audio |
 | `tools/` | Scripts que generan el arte (`make_assets.py`) y la música (`make_audio.py`) |
 | `packaging/` | Icono, acceso directo y script del AppImage |

@@ -7,6 +7,7 @@
 #include "achievements.h"
 #include "audio.h"
 #include "cheats.h"
+#include "game_buttons.h"
 #include "config.h"
 #include "emulator.h"
 #include "gl.h"
@@ -324,6 +325,7 @@ enum OptRow
   OPT_MUSIC,
   OPT_SFX,
   OPT_PROMPTS,
+  OPT_GAME_PROMPTS,
   OPT_REMAP_KB,
   OPT_REMAP_PAD,
   OPT_RESET_CONTROLS,
@@ -353,7 +355,7 @@ const std::vector<int>& OptPageRows(int page)
     {OPT_RENDERER, OPT_SCALE, OPT_TEXFILTER, OPT_PGXP, OPT_WIDESCREEN, OPT_SIDEART, OPT_SMOOTH, OPT_FULLSCREEN,
      OPT_BACK},
     {OPT_VOLUME, OPT_MUSIC, OPT_SFX, OPT_BACK},
-    {OPT_PROMPTS, OPT_REMAP_KB, OPT_REMAP_PAD, OPT_RESET_CONTROLS, OPT_CONTROLS, OPT_BACK},
+    {OPT_PROMPTS, OPT_GAME_PROMPTS, OPT_REMAP_KB, OPT_REMAP_PAD, OPT_RESET_CONTROLS, OPT_CONTROLS, OPT_BACK},
     {OPT_BACK}, // TRUCOS tiene su propia pantalla
   };
   return pages[std::clamp(page, 0, kOptCategoryCount - 1)];
@@ -536,7 +538,12 @@ private:
   void ToggleFullscreen();
   void ImportBios(const std::string& path);
   void SetGamePath(const std::string& path);
-  std::string StatePath() const { return Paths::StatesDir() + "/" + StemName(m_cfg.game_path) + ".state"; }
+  std::string StatePath() const
+  {
+    if (const char* test = std::getenv("TENSHU_TEST_STATE")) // pruebas: nunca el estado del usuario
+      return test;
+    return Paths::StatesDir() + "/" + StemName(m_cfg.game_path) + ".state";
+  }
   bool HasResumeState() const { return Paths::FileExists(StatePath()); }
   bool HasSonyBios() const
   {
@@ -557,6 +564,18 @@ private:
   // Entrada
   PromptStyle CurrentStyle() const;
   PromptStyle PadStyle() const;
+  // Iconos de botones dentro del juego para el mando en uso.
+  std::vector<uint8_t> GameButtonPatches() const
+  {
+    if (!m_cfg.game_prompts)
+      return {};
+    switch (CurrentStyle())
+    {
+      case PromptStyle::Keyboard: return BuildGameButtonPatches(GameButtonStyle::Keyboard, m_cfg);
+      case PromptStyle::Xbox: return BuildGameButtonPatches(GameButtonStyle::Xbox, m_cfg);
+      default: return {};
+    }
+  }
   void Navigate(int dy, int dx);
   void NavigateImpl(int dy, int dx);
   void Accept();
@@ -630,7 +649,8 @@ private:
   int m_cheat_sel = 0;
   float m_cheat_scroll = 0;
   bool m_cheats_active = false;    // la partida en curso usa trucos: logros en pausa
-  bool m_hardcore_session = false; // la partida en curso es hardcore: sin estados guardados
+  bool m_hardcore_session = false;
+  bool m_test_saved = false; // la partida en curso es hardcore: sin estados guardados
   float m_credits_scroll = 0, m_credits_target = 0;
   float m_credits_height = 0; // alto total del texto de créditos (px de la ilustración)
   int m_remap_device = 0;   // 0 teclado, 1 mando
@@ -776,7 +796,7 @@ void App::OpenController(int index)
 
 void App::Shutdown()
 {
-  StopGame(true);
+  StopGame(m_screenshot_path.empty()); // en el modo de prueba no se toca la partida del usuario
   m_audio.Shutdown();
   m_r.Shutdown();
   if (m_pad)
@@ -906,6 +926,7 @@ void App::StartGame(bool resume)
   const std::vector<std::string> cheats = m_hardcore_session ? std::vector<std::string>{} : ActiveCheatCodes();
   m_cheats_active = !cheats.empty();
   m_emu.SetCheats(cheats);
+  m_emu.SetButtonPatches(GameButtonPatches());
   std::string error;
   if (!m_emu.Start(m_cfg, m_window, m_gl, &error))
   {
@@ -1194,6 +1215,7 @@ void App::OptionChange(int row, int dir)
         ShowDialog("Modo hardcore activado.\n\nNecesita la BIOS original de tu PlayStation: cárgala con "
                    "«Cargar BIOS nueva…» y elígela en la fila BIOS.");
       break;
+    case OPT_GAME_PROMPTS: m_cfg.game_prompts = !m_cfg.game_prompts; break;
     case OPT_PROMPTS:
     {
       static const char* styles[] = {"auto", "keyboard", "xbox", "playstation"};
@@ -1936,6 +1958,8 @@ void App::HandleEvent(const SDL_Event& e)
 void App::Update(float dt)
 {
   m_time += dt;
+  if (m_emu.IsRunning())
+    m_emu.SetButtonPatches(GameButtonPatches()); // sólo actúa si cambia el mando o la asignación
   m_fade = std::min(1.0f, m_fade + dt * 1.2f);
   m_intro_t += dt;
   if (!m_intro_sound && m_intro_t > 0.12f)
@@ -2693,6 +2717,11 @@ void App::RenderOptions()
                                                                     : "Automático";
         return {"Iconos de botones", p, true, true};
       }
+      case OPT_GAME_PROMPTS:
+      {
+        return {"Iconos dentro del juego", m_cfg.game_prompts ? "Según el mando" : "Originales (PlayStation)", true,
+                true};
+      }
       case OPT_REMAP_KB: return {"Personalizar teclado", ""};
       case OPT_REMAP_PAD: return {"Personalizar mando", ""};
       case OPT_RESET_CONTROLS:
@@ -2785,6 +2814,10 @@ void App::RenderOptions()
     case OPT_MUSIC: help = "Música del launcher (menús y pausa)."; break;
     case OPT_SFX: help = "Sonidos del launcher al moverte, elegir y cancelar."; break;
     case OPT_PROMPTS: help = "Iconos de botones del launcher. Automático cambia según uses teclado o mando."; break;
+    case OPT_GAME_PROMPTS:
+      help = "Los iconos de botones de los menús del juego se cambian por los de tu mando de Xbox o tu teclado, "
+             "con tus asignaciones.";
+      break;
     case OPT_CONTROLS: help = "Teclado, mando de Xbox y mando de PlayStation, con tus asignaciones."; break;
     case OPT_REMAP_KB: help = "Cambia qué tecla corresponde a cada botón. No afecta al mando."; break;
     case OPT_REMAP_PAD: help = "Cambia qué botón del mando corresponde a cada botón. No afecta al teclado."; break;
@@ -3473,6 +3506,8 @@ int App::Run(int argc, char** argv)
 
     if (screenshot_screen == "game" || screenshot_screen == "continue")
     {
+      if (const char* st = std::getenv("TENSHU_TEST_STYLE"))
+        m_cfg.prompt_style = st;
       StartGame(screenshot_screen == "continue");
       if (m_modal == Modal::Dialog)
         SDL_Log("Error al arrancar: %s", m_dialog.c_str());
@@ -3507,6 +3542,14 @@ int App::Run(int argc, char** argv)
         const uint64_t now = SDL_GetPerformanceCounter();
         const double el = (now - start) / freq;
         m_test_buttons = 0;
+        // TENSHU_TEST_SAVE_AT="50" guarda un estado (en TENSHU_TEST_STATE) en ese segundo.
+        if (const char* sv = std::getenv("TENSHU_TEST_SAVE_AT"))
+          if (el >= std::atof(sv) && !m_test_saved)
+            m_test_saved = m_emu.SaveState(StatePath());
+        // TENSHU_TEST_STYLE_AT="55:xbox" cambia el estilo de iconos en plena partida.
+        if (const char* sa = std::getenv("TENSHU_TEST_STYLE_AT"))
+          if (el >= std::atof(sa) && std::strchr(sa, ':'))
+            m_cfg.prompt_style = std::strchr(sa, ':') + 1;
         for (const auto& [t, id] : script)
           if (el >= t && el < t + 0.15)
             m_test_buttons |= static_cast<uint16_t>(1u << id);
@@ -3520,6 +3563,10 @@ int App::Run(int argc, char** argv)
                   static_cast<unsigned long long>(m_emu.FramesRun()), m_emu.TargetFps(), m_emu.FrameWidth(),
                   m_emu.FrameHeight());
           capture(m_screenshot_path + "." + std::to_string(shot) + ".ppm");
+          if (std::getenv("TENSHU_TEST_STATE_EACH"))
+            m_emu.SaveState(m_screenshot_path + "." + std::to_string(shot) + ".state");
+          if (std::getenv("TENSHU_DUMP_VRAM"))
+            m_emu.DumpVram(m_screenshot_path + "." + std::to_string(shot) + ".vram");
           if (std::getenv("TENSHU_DUMP_RAM"))
           {
             size_t n = 0;
@@ -3649,6 +3696,30 @@ int App::Run(int argc, char** argv)
 
 int main(int argc, char** argv)
 {
+  // Prueba: TENSHU_PREVIEW_BUTTONS=archivo.ppm guarda los iconos generados para el juego
+  // (columnas: Xbox, teclado; con la configuración actual) y sale.
+  if (const char* out = std::getenv("TENSHU_PREVIEW_BUTTONS"))
+  {
+    Config cfg;
+    cfg.Load();
+    const auto xb = PreviewGameButtons(GameButtonStyle::Xbox, cfg);
+    const auto kb = PreviewGameButtons(GameButtonStyle::Keyboard, cfg);
+    const int h = static_cast<int>(xb.size() / 16);
+    if (FILE* f = std::fopen(out, "wb"))
+    {
+      std::fprintf(f, "P6 %d %d 255\n", 34, h);
+      for (int y = 0; y < h; y++)
+        for (int x = 0; x < 34; x++)
+        {
+          const uint32_t c = x < 16 ? xb[y * 16 + x] : x < 18 ? 0 : kb[y * 16 + x - 18];
+          const unsigned char px[3] = {static_cast<unsigned char>(c), static_cast<unsigned char>(c >> 8),
+                                       static_cast<unsigned char>(c >> 16)};
+          std::fwrite(px, 1, 3, f);
+        }
+      std::fclose(f);
+    }
+    return 0;
+  }
   App app;
   return app.Run(argc, argv);
 }

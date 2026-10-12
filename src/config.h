@@ -33,6 +33,7 @@ struct Config
   bool fast_boot = true;         // salta la intro de la BIOS
   bool hardcore = false;         // modo hardcore: BIOS original, sin estados guardados ni trucos
   std::string cheats;            // nombres de los trucos activos, separados por '|'
+  bool game_prompts = true;      // cambiar también los iconos de botones dentro del juego
   std::string prompt_style = "auto"; // iconos de botones: auto, keyboard, xbox, playstation
 
   void Load();

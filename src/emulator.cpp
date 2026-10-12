@@ -1,5 +1,6 @@
 #include "emulator.h"
 #include "libretro.h"
+#include "game_buttons.h"
 
 #include <cstdarg>
 #include <cstdio>
@@ -377,6 +378,11 @@ bool Emulator::LoadCore(std::string* error)
   LOAD_SYM(retro_get_memory_data)
   LOAD_SYM(retro_get_memory_size)
 #undef LOAD_SYM
+  m_kage_watch = reinterpret_cast<decltype(m_kage_watch)>(dlsym(m_lib, "kage_vram_watch"));
+  m_kage_set_patches = reinterpret_cast<decltype(m_kage_set_patches)>(dlsym(m_lib, "kage_vram_set_patches"));
+  m_kage_log = reinterpret_cast<decltype(m_kage_log)>(dlsym(m_lib, "kage_vram_log"));
+  m_kage_dump = reinterpret_cast<decltype(m_kage_dump)>(dlsym(m_lib, "kage_vram_dump"));
+  m_kage_refresh = reinterpret_cast<decltype(m_kage_refresh)>(dlsym(m_lib, "kage_vram_refresh"));
   return true;
 }
 
@@ -474,6 +480,15 @@ bool Emulator::Start(const Config& cfg, SDL_Window* window, SDL_GLContext ui_con
   g_core.retro_set_input_state(&Impl::InputState);
 
   m_game_path = cfg.game_path;
+  // Iconos de botones del juego según el mando (parches de píxeles sobre las texturas subidas).
+  if (m_kage_watch && m_kage_set_patches)
+  {
+    for (const GameUpload& u : GameButtonUploads())
+      m_kage_watch(u.hash_low, u.hash_high, u.x, u.y);
+    m_kage_set_patches(m_button_patches.data(), m_button_patches.size());
+  }
+  if (m_kage_log)
+    m_kage_log(std::getenv("TENSHU_VRAM_LOG") ? std::getenv("TENSHU_VRAM_LOG") : "");
   retro_game_info info = {};
   info.path = m_game_path.c_str();
   if (!g_core.retro_load_game(&info))
@@ -756,6 +771,22 @@ bool Emulator::LoadState(const std::string& path)
   std::vector<uint8_t> buf((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
   MakeCoreCurrent();
   const bool ok = !buf.empty() && g_core.retro_unserialize(buf.data(), buf.size());
+  if (ok && m_kage_refresh)
+    m_kage_refresh(); // la VRAM viene del estado: se reescriben los iconos del mando actual
   MakeUiCurrent();
   return ok;
+}
+
+void Emulator::SetButtonPatches(std::vector<uint8_t> patches)
+{
+  if (patches == m_button_patches)
+    return;
+  m_button_patches = std::move(patches);
+  if (m_kage_set_patches)
+    m_kage_set_patches(m_button_patches.data(), m_button_patches.size());
+}
+
+bool Emulator::DumpVram(const std::string& path)
+{
+  return m_running && m_kage_dump && m_kage_dump(path.c_str());
 }
