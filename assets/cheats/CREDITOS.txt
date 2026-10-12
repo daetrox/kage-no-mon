@@ -1,0 +1,6 @@
+Trucos de Tenchu 2 tomados de la base de datos comunitaria de DuckStation (chtdb):
+https://github.com/duckstation/chtdb  (commit e3cce50)
+
+Los derechos de cada truco pertenecen a sus autores originales, tal como indica chtdb.
+Versiones: SLES-02465 (España), SLES-02452 (Europa), SLES-02463 (Alemania),
+SLPS-03040 (Japón), SLUS-00939 (EE. UU.).

@@ -6,6 +6,7 @@
 // expresan en píxeles de esa imagen (1536x1024) y se escalan a la altura de la ventana.
 #include "achievements.h"
 #include "audio.h"
+#include "cheats.h"
 #include "config.h"
 #include "emulator.h"
 #include "gl.h"
@@ -226,6 +227,7 @@ enum class Screen
   Controls,
   Remap,
   Credits,
+  Cheats,
   Achievements,
   Game,
 };
@@ -331,14 +333,16 @@ enum OptRow
 constexpr int kPauseItems = 6;
 
 // Opciones: lista de categorías (página -1) y sus páginas (0..3).
-constexpr int kOptCategoryCount = 4;
-const char* const kOptCategories[kOptCategoryCount] = {"ISO Y BIOS", "GRÁFICOS", "SONIDO", "CONTROLES"};
-const char* const kOptKanji[kOptCategoryCount] = {"盤", "絵", "音", "操"};
+constexpr int kOptCategoryCount = 5;
+constexpr int kCheatsCategory = 4; // abre la pantalla de trucos en lugar de una página de filas
+const char* const kOptCategories[kOptCategoryCount] = {"ISO Y BIOS", "GRÁFICOS", "SONIDO", "CONTROLES", "TRUCOS"};
+const char* const kOptKanji[kOptCategoryCount] = {"盤", "絵", "音", "操", "術"};
 const char* const kOptCategoryHelp[kOptCategoryCount] = {
   "Imagen del disco, BIOS de la consola y arranque.",
-  "Resolución, filtros, pantalla panorámica y pantalla completa.",
+  "Resolución, filtros, aspecto de la pantalla y pantalla completa.",
   "Volumen del juego, de la música y de los efectos.",
-  "Iconos de botones y esquema de controles.",
+  "Iconos de botones, personalización y esquema de controles.",
+  "Vida infinita, misiones desbloqueadas y más. Mientras haya trucos activos, los logros se pausan.",
 };
 
 const std::vector<int>& OptPageRows(int page)
@@ -349,6 +353,7 @@ const std::vector<int>& OptPageRows(int page)
      OPT_BACK},
     {OPT_VOLUME, OPT_MUSIC, OPT_SFX, OPT_BACK},
     {OPT_PROMPTS, OPT_REMAP_KB, OPT_REMAP_PAD, OPT_RESET_CONTROLS, OPT_CONTROLS, OPT_BACK},
+    {OPT_BACK}, // TRUCOS tiene su propia pantalla
   };
   return pages[std::clamp(page, 0, kOptCategoryCount - 1)];
 }
@@ -484,6 +489,10 @@ private:
   void RenderOptionCategories();
   void RenderRemap();
   void RenderCredits();
+  void RenderCheats();
+  bool CheatEnabled(const std::string& name) const;
+  void SetCheatEnabled(const std::string& name, bool on);
+  std::vector<std::string> ActiveCheatCodes() const;
   void RenderConfirmReset();
   void AssignBinding(int retro_id, int value);
   void RenderControls();
@@ -603,6 +612,10 @@ private:
   std::string m_ach_game_path;
   std::string m_ws_serial_path;
   bool m_ws_available = false;
+  std::vector<Cheat> m_cheat_list; // trucos del disco actual (pantalla TRUCOS)
+  int m_cheat_sel = 0;
+  float m_cheat_scroll = 0;
+  bool m_cheats_active = false;    // la partida en curso usa trucos: logros en pausa
   float m_credits_scroll = 0, m_credits_target = 0;
   float m_credits_height = 0; // alto total del texto de créditos (px de la ilustración)
   int m_remap_device = 0;   // 0 teclado, 1 mando
@@ -853,7 +866,7 @@ void App::StartGame(bool resume)
   if (m_cfg.game_path.empty() || !Paths::FileExists(m_cfg.game_path))
   {
     ShowDialog("No hay ninguna imagen de disco seleccionada.\n\nCópiala en la carpeta game/ del launcher,\n"
-               "elígela en OPCIONES › ISO y BIOS,\no arrástrala sobre la ventana.");
+               "elígela en OPCIONES · ISO y BIOS,\no arrástrala sobre la ventana.");
     return;
   }
 
@@ -864,6 +877,9 @@ void App::StartGame(bool resume)
   SDL_GL_SwapWindow(m_window);
 
   m_audio.Play(Sfx::Start);
+  const std::vector<std::string> cheats = ActiveCheatCodes();
+  m_cheats_active = !cheats.empty();
+  m_emu.SetCheats(cheats);
   std::string error;
   if (!m_emu.Start(m_cfg, m_window, m_gl, &error))
   {
@@ -874,8 +890,16 @@ void App::StartGame(bool resume)
   if (resume && !m_emu.LoadState(StatePath()))
     Toast("No se pudo cargar la partida guardada");
 
-  // Logros: se evalúan tras cada frame emulado leyendo la RAM.
-  m_ach.BeginSession();
+  // Logros: se evalúan tras cada frame emulado leyendo la RAM (en pausa si hay trucos activos).
+  if (m_cheats_active)
+  {
+    m_ach.EndSession();
+    Toast("Trucos activos: los logros están en pausa");
+  }
+  else
+  {
+    m_ach.BeginSession();
+  }
   m_emu.on_frame = [this]() {
     size_t n = 0;
     const uint8_t* ram = m_emu.SystemRam(&n);
@@ -918,7 +942,8 @@ void App::ActivatePause(int index)
     case 2:
       if (m_emu.LoadState(StatePath()))
       {
-        m_ach.BeginSession(); // reinicia la evaluación tras cambiar la memoria
+        if (!m_cheats_active)
+          m_ach.BeginSession(); // reinicia la evaluación tras cambiar la memoria
         Toast("Partida cargada");
       }
       else
@@ -992,8 +1017,51 @@ void App::StartLogin()
 void App::OpenOptionPage(int page)
 {
   m_audio.Play(Sfx::Select);
+  if (page == kCheatsCategory)
+  {
+    m_screen = Screen::Cheats;
+    m_cheat_list = LoadCheats(Paths::AssetsDir(), Paths::ReadDiscSerial(m_cfg.game_path));
+    m_cheat_sel = 0;
+    m_cheat_scroll = 0;
+    return;
+  }
   m_opt_page = page;
   m_opt_sel = 0;
+}
+
+bool App::CheatEnabled(const std::string& name) const
+{
+  std::stringstream ss(m_cfg.cheats);
+  std::string item;
+  while (std::getline(ss, item, '|'))
+    if (item == name)
+      return true;
+  return false;
+}
+
+void App::SetCheatEnabled(const std::string& name, bool on)
+{
+  std::vector<std::string> names;
+  std::stringstream ss(m_cfg.cheats);
+  std::string item;
+  while (std::getline(ss, item, '|'))
+    if (!item.empty() && item != name)
+      names.push_back(item);
+  if (on)
+    names.push_back(name);
+  m_cfg.cheats.clear();
+  for (const std::string& n : names)
+    m_cfg.cheats += (m_cfg.cheats.empty() ? "" : "|") + n;
+  m_cfg.Save();
+}
+
+std::vector<std::string> App::ActiveCheatCodes() const
+{
+  std::vector<std::string> codes;
+  for (const Cheat& c : LoadCheats(Paths::AssetsDir(), Paths::ReadDiscSerial(m_cfg.game_path)))
+    if (CheatEnabled(c.name))
+      codes.push_back(c.codes);
+  return codes;
 }
 
 // Recorre OpenBIOS (valor vacío) y las BIOS cargadas en bios/.
@@ -1186,6 +1254,16 @@ void App::NavigateImpl(int dy, int dx)
   {
     case Screen::Menu: m_sel = (m_sel + dy + kMenuItems) % kMenuItems; break;
     case Screen::Credits: m_credits_target += dy * 120.0f; break;
+    case Screen::Cheats:
+    {
+      // Filas: los trucos, "Desactivar todos" y "Volver".
+      const int n = static_cast<int>(m_cheat_list.size()) + 2;
+      if (dy)
+        m_cheat_sel = (m_cheat_sel + dy + n) % n;
+      if (dx && m_cheat_sel < static_cast<int>(m_cheat_list.size()))
+        Accept();
+      break;
+    }
     case Screen::Options:
     {
       const int n = m_opt_page < 0 ? kOptCategoryCount + 1 : static_cast<int>(OptPageRows(m_opt_page).size());
@@ -1304,6 +1382,29 @@ void App::Accept()
         m_choice_sel = 1; // por seguridad, empieza en "Cancelar"
       }
       break;
+    case Screen::Cheats:
+    {
+      const int n = static_cast<int>(m_cheat_list.size());
+      if (m_cheat_sel < n)
+      {
+        const Cheat& c = m_cheat_list[m_cheat_sel];
+        const bool on = !CheatEnabled(c.name);
+        SetCheatEnabled(c.name, on);
+        m_audio.Play(on ? Sfx::Select : Sfx::Cancel);
+      }
+      else if (m_cheat_sel == n)
+      {
+        m_cfg.cheats.clear();
+        m_cfg.Save();
+        m_audio.Play(Sfx::Cancel);
+        Toast("Trucos desactivados");
+      }
+      else
+      {
+        Back();
+      }
+      break;
+    }
     case Screen::Remap:
       if (m_remap_sel < kPsButtons)
       {
@@ -1383,6 +1484,11 @@ void App::Back()
     case Screen::Credits:
       m_screen = Screen::Menu;
       m_sel = 3;
+      break;
+    case Screen::Cheats:
+      m_screen = Screen::Options;
+      m_opt_page = -1;
+      m_opt_sel = kCheatsCategory;
       break;
     case Screen::Remap:
       if (m_remap_wait >= 0)
@@ -1629,7 +1735,8 @@ void App::HandleEvent(const SDL_Event& e)
         {
           if (m_emu.LoadState(StatePath()))
           {
-            m_ach.BeginSession();
+            if (!m_cheats_active)
+              m_ach.BeginSession();
             Toast("Partida cargada");
           }
           else
@@ -1707,6 +1814,8 @@ void App::HandleEvent(const SDL_Event& e)
       }
       else if (m_screen == Screen::Credits)
         m_credits_target -= e.wheel.y * 90.0f;
+      else if (m_screen == Screen::Cheats)
+        Navigate(e.wheel.y > 0 ? -1 : 1, 0);
       else if (m_screen == Screen::Options)
         Navigate(e.wheel.y > 0 ? -1 : 1, 0);
       break;
@@ -1733,6 +1842,7 @@ void App::HandleEvent(const SDL_Event& e)
           case 2: m_pause_sel = z.index; break;
           case 3: m_choice_sel = z.index; break;
           case 7: m_remap_sel = z.index; break;
+          case 8: m_cheat_sel = z.index; break;
           default: break;
         }
       }
@@ -1890,6 +2000,18 @@ void App::Update(float dt)
     m_ach_scroll += (m_ach_scroll_target - m_ach_scroll) * std::min(1.0f, dt * 12.0f);
   }
 
+  // Trucos: la fila elegida queda siempre a la vista.
+  if (m_screen == Screen::Cheats)
+  {
+    const float rh = 56.0f, view_h = 560.0f;
+    const int n = static_cast<int>(m_cheat_list.size());
+    if (m_cheat_sel < n)
+    {
+      const float target = std::clamp(m_cheat_sel * rh - view_h / 2 + rh, 0.0f, std::max(0.0f, n * rh - view_h));
+      m_cheat_scroll += (target - m_cheat_scroll) * std::min(1.0f, dt * 12.0f);
+    }
+  }
+
   // Créditos: avanzan solos despacio; las flechas o la rueda los mueven a mano.
   if (m_screen == Screen::Credits)
   {
@@ -1964,6 +2086,7 @@ void App::Render()
       case Screen::Controls: RenderControls(); break;
       case Screen::Remap: RenderRemap(); break;
       case Screen::Credits: RenderCredits(); break;
+      case Screen::Cheats: RenderCheats(); break;
       case Screen::Achievements: RenderAchievements(); break;
       default: break;
     }
@@ -2472,7 +2595,7 @@ void App::RenderOptions()
 
   const float px = 40, py = 56, pw = 880, ph = 950;
   Panel(px, py, pw, ph);
-  m_r.Text(m_r.ui, "OPCIONES  ›", IX(px + 48), IY(py + 18), IS(22), kDim);
+  m_r.Text(m_r.ui, "OPCIONES", IX(px + 48), IY(py + 18), IS(22), kDim);
   m_r.Text(m_r.brush, kOptCategories[m_opt_page], IX(px + 44), IY(py + 42), IS(52), kWhite);
   m_r.TextCentered(m_r.kanji, kOptKanji[m_opt_page], IX(px + pw - 80), IY(py + 70), IS(84),
                    {0.6f, 0.04f, 0.04f, 0.45f});
@@ -2640,7 +2763,7 @@ void App::RenderRemap()
   const float px = 40, py = 56, pw = 900, ph = 950;
   Panel(px, py, pw, ph);
   const bool kb = (m_remap_device == 0);
-  m_r.Text(m_r.ui, "OPCIONES  ›  CONTROLES  ›", IX(px + 48), IY(py + 18), IS(22), kDim);
+  m_r.Text(m_r.ui, "OPCIONES  ·  CONTROLES", IX(px + 48), IY(py + 18), IS(22), kDim);
   m_r.Text(m_r.brush, kb ? "TECLADO" : "MANDO", IX(px + 44), IY(py + 42), IS(52), kWhite);
   m_r.TextCentered(m_r.kanji, "操", IX(px + pw - 80), IY(py + 70), IS(84), {0.6f, 0.04f, 0.04f, 0.45f});
 
@@ -2745,6 +2868,80 @@ void App::RenderRemap()
   RenderHints({{PsButton::Accept, "Cambiar"}, {PsButton::Back, "Volver"}}, m_w - IS(28), m_h - IS(58));
 }
 
+void App::RenderCheats()
+{
+  DimScreen(0.5f);
+  const float px = 40, py = 56, pw = 900, ph = 950;
+  Panel(px, py, pw, ph);
+  m_r.Text(m_r.ui, "OPCIONES", IX(px + 48), IY(py + 18), IS(22), kDim);
+  m_r.Text(m_r.brush, "TRUCOS", IX(px + 44), IY(py + 42), IS(52), kWhite);
+  m_r.TextCentered(m_r.kanji, "術", IX(px + pw - 80), IY(py + 70), IS(84), {0.6f, 0.04f, 0.04f, 0.45f});
+
+  const int n = static_cast<int>(m_cheat_list.size());
+  int active = 0;
+  for (const Cheat& c : m_cheat_list)
+    active += CheatEnabled(c.name);
+  const std::string state = n == 0 ? "" : active == 0 ? "Ningún truco activo"
+                                                       : std::to_string(active) + (active == 1 ? " truco activo"
+                                                                                               : " trucos activos");
+  m_r.Text(m_r.ui, state, IX(px + pw - 40), IY(py + 118), IS(22), active ? kGold : kDim, Align::Right);
+  m_r.Text(m_r.ui, active ? "Los logros se pausarán en la próxima partida." : "Se aplican al iniciar la partida.",
+           IX(px + 48), IY(py + 118), IS(22), active ? Color{1.0f, 0.75f, 0.3f, 0.95f} : kDim);
+
+  const float top = py + 160, view_h = 560, rh = 56;
+  if (n == 0)
+  {
+    for (const std::string& line : Wrap(m_r.ui,
+                                        "No hay trucos disponibles para este disco. Hay trucos para las versiones de "
+                                        "Tenchu 2 de España, Europa, Alemania, EE. UU. y Japón.",
+                                        IS(26), IS(pw - 100)))
+    {
+      m_r.Text(m_r.ui, line, IX(px + 52), IY(top), IS(26), kGrey);
+    }
+  }
+  m_r.SetClip(IX(px + 10), IY(top), IS(pw - 20), IS(view_h));
+  for (int i = 0; i < n; i++)
+  {
+    const float y = top + i * rh - m_cheat_scroll;
+    if (y + rh < top || y > top + view_h)
+      continue;
+    const Cheat& c = m_cheat_list[i];
+    const bool sel = (i == m_cheat_sel), on = CheatEnabled(c.name);
+    const Rect rr = IR({px + 22, y, pw - 44, rh - 6});
+    if (sel)
+      m_r.Sprite(m_btn_sel, rr.x - IS(10), rr.y - IS(7), rr.w + IS(20), rr.h + IS(14), {1, 1, 1, 0.95f});
+    const Color lc = sel ? Color{1, 0.98f, 0.96f, 1} : on ? kWhite : Color{0.8f, 0.78f, 0.76f, 1};
+    FitText(m_r.ui, c.label, rr.x + IS(30), rr.y + IS(8), rr.w - IS(200), IS(27), lc, Align::Left, sel, 30000 + i);
+    m_r.Text(m_r.ui, on ? "Activado" : "No", rr.x + rr.w - IS(26), rr.y + IS(9), IS(25),
+             on ? kGold : Color{0.6f, 0.58f, 0.56f, 1}, Align::Right);
+    Hot(rr, 8, i, [this, i](float, float) {
+      m_cheat_sel = i;
+      Accept();
+    });
+  }
+  m_r.ClearClip();
+
+  const char* extra[2] = {"Desactivar todos", "Volver"};
+  for (int k = 0; k < 2; k++)
+  {
+    const int i = n + k;
+    const float y = top + view_h + 20 + k * rh;
+    const bool sel = (i == m_cheat_sel);
+    const Rect rr = IR({px + 22, y, pw - 44, rh - 6});
+    if (sel)
+      m_r.Sprite(m_btn_sel, rr.x - IS(10), rr.y - IS(7), rr.w + IS(20), rr.h + IS(14), {1, 1, 1, 0.95f});
+    m_r.Text(m_r.ui, extra[k], rr.x + IS(30), rr.y + IS(8), IS(27),
+             sel ? Color{1, 0.98f, 0.96f, 1} : Color{0.86f, 0.84f, 0.82f, 1});
+    Hot(rr, 8, i, [this, i](float, float) {
+      m_cheat_sel = i;
+      Accept();
+    });
+  }
+  m_r.Text(m_r.ui, "Trucos de la base de datos comunitaria de DuckStation (chtdb).", IX(px + 48), IY(py + ph - 60),
+           IS(19), kDim);
+  RenderHints({{PsButton::Accept, "Activar / desactivar"}, {PsButton::Back, "Volver"}}, m_w - IS(28), m_h - IS(58));
+}
+
 void App::RenderCredits()
 {
   DimScreen(0.55f);
@@ -2785,6 +2982,8 @@ void App::RenderCredits()
   const std::vector<Line> rest = {
     {0, "PANTALLA PANORÁMICA", ""},
     {1, "El_Patas y PeterDelta", "Parche 16:9 nativo  ·  base de datos chtdb de DuckStation"},
+    {0, "TRUCOS", ""},
+    {1, "Comunidad de chtdb (DuckStation)", "Códigos de trucos de Tenchu 2, de sus respectivos autores"},
     {0, "BIBLIOTECAS", ""},
     {1, "SDL2", "Sam Lantinga y colaboradores  ·  zlib"},
     {1, "stb_truetype, stb_image, stb_vorbis", "Sean Barrett  ·  dominio público"},
@@ -3098,7 +3297,9 @@ void App::RenderPause()
     DrawMenuButton(slot, labels[i], icons[i], m_sel_anim[i], 34, true);
     Hot(IR(slot), 2, i, [this, i](float, float) { ActivatePause(i); });
   }
-  if (m_ach.GetState() == Achievements::State::Ready)
+  if (m_cheats_active)
+    m_r.Text(m_r.ui, "Logros en pausa: hay trucos activos", IX(px + 70), IY(py + ph - 64), IS(24), kDim);
+  else if (m_ach.GetState() == Achievements::State::Ready)
     m_r.Text(m_r.ui,
              "Logros: " + std::to_string(m_ach.EarnedCount()) + " / " + std::to_string(m_ach.List().size()),
              IX(px + 70), IY(py + ph - 64), IS(24), kGold);
@@ -3301,6 +3502,18 @@ int App::Run(int argc, char** argv)
       if (screenshot_screen == "controls") m_screen = Screen::Controls;
       if (screenshot_screen == "remap") m_screen = Screen::Remap;
       if (screenshot_screen == "credits") m_screen = Screen::Credits;
+      if (screenshot_screen == "cheats")
+      {
+        m_screen = Screen::Cheats;
+        m_cheat_list = LoadCheats(Paths::AssetsDir(), Paths::ReadDiscSerial(m_cfg.game_path));
+        if (const char* cs = std::getenv("TENSHU_TEST_CHEATSEL"))
+        {
+          m_cheat_sel = std::atoi(cs);
+          const int n = static_cast<int>(m_cheat_list.size());
+          if (m_cheat_sel < n)
+            m_cheat_scroll = std::clamp(m_cheat_sel * 56.0f - 224.0f, 0.0f, std::max(0.0f, n * 56.0f - 560.0f));
+        }
+      }
       if (const char* cs = std::getenv("TENSHU_TEST_CREDITS"))
         m_credits_scroll = static_cast<float>(std::atof(cs));
       if (screenshot_screen == "confirmreset")

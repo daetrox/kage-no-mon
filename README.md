@@ -50,6 +50,7 @@ ni mensajes extraños.
 | ✨ **Gráficos mejorados** | Hasta 5× la resolución original, texturas suavizadas (xBR) y polígonos sin temblores. |
 | 🎮 **Teclado, Xbox o PlayStation** | Los iconos de los botones cambian solos según lo que uses. |
 | ⌨️ **Controles a tu gusto** | Reasigna cada botón del teclado y del mando por separado, con restauración por defecto. |
+| 🥷 **Trucos** | Vida infinita, todas las misiones, objetos infinitos… Se activan en *Opciones › Trucos* (los logros se pausan mientras haya trucos). |
 | 🇪🇸 **Logros en español** | Las descripciones se traducen en tu equipo, con los nombres oficiales de las misiones. |
 | 📜 **Créditos** | Todas las personas y proyectos que hacen posible el launcher, con sus licencias. |
 | 💾 **Guardado rápido** | Al salir se guarda tu partida y la retomas con **CONTINUAR**. |
@@ -167,7 +168,8 @@ juego. Si quieres la original, copia la de tu consola en `bios/` y elígela en
 <summary><b>¿Qué versiones del juego funcionan?</b></summary>
 
 Cualquier versión de *Tenchu 2* para PlayStation debería arrancar. La pantalla panorámica 16:9
-está disponible para las versiones europeas **SLES-02465** (España) y **SLES-02452** (Europa).
+está disponible para **SLES-02465** (España), **SLES-02452** (Europa), **SLUS-00939** (EE. UU.)
+y **SLPS-03040** (Japón).
 </details>
 
 <details>
@@ -228,6 +230,7 @@ Para retocar el arte en vivo, edita `assets/shaders/*.frag` con el launcher abie
 - 🧩 **[OpenBIOS](https://github.com/pcsx-redux/nugget)** — BIOS libre de PCSX-Redux (MIT), integrada en el núcleo.
 - 🏆 **[rcheevos](https://github.com/RetroAchievements/rcheevos)** — logros (MIT) · datos de [RetroAchievements](https://retroachievements.org).
 - 🖥️ **Parche 16:9** — El_Patas y PeterDelta, de la base de datos [chtdb](https://github.com/duckstation/chtdb).
+- 🥷 **Trucos** — códigos de la comunidad recopilados en [chtdb](https://github.com/duckstation/chtdb) (ver `assets/cheats/CREDITOS.txt`).
 - 🧱 **[SDL2](https://libsdl.org)** (zlib) · **[stb](https://github.com/nothings/stb)** (dominio público).
 - 🔤 Fuentes: Permanent Marker (Apache-2.0), Oswald, Shojumaru, Kaushan Script y Yuji Syuku (SIL OFL 1.1).
 - 🎵 Música y efectos: composición original generada con `tools/make_audio.py`.

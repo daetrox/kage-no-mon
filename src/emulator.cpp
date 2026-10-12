@@ -300,8 +300,8 @@ struct Emulator::Impl
 
 // --- Ciclo de vida -----------------------------------------------------------------------------
 
-// Parches 16:9 de la base de datos comunitaria de DuckStation (chtdb, carpeta patches/).
-// Autores: El_Patas & PeterDelta. Los códigos A7 (exclusivos de DuckStation) se expresan como el
+// Parches 16:9 de la base de datos comunitaria de DuckStation (chtdb): carpeta patches/ para las
+// versiones europeas (El_Patas & PeterDelta) y la de EE. UU.; trucos para la japonesa. Los códigos A7 (exclusivos de DuckStation) se expresan como el
 // par equivalente D0 (si es igual a) + 80 (escribir 16 bits), que SwanStation sí entiende.
 const char* Emulator::WidescreenPatch(const std::string& serial)
 {
@@ -315,6 +315,9 @@ const char* Emulator::WidescreenPatch(const std::string& serial)
     {"SLES-02465", "D00CCE90 1000+800CCE90 0C00+D00CFF78 1000+800CFF78 0C00"},
     // Tenchu 2 (Europa)
     {"SLES-02452", "D00CCEA0 1000+800CCEA0 0C00+D00CFF8C 1000+800CFF8C 0C00"},
+    // Tenchu 2 (EE. UU.) y Rittai Ninja Katsugeki Tenchu 2 (Japón)
+    {"SLUS-00939", "800CD358 0C00"},
+    {"SLPS-03040", "800CEF18 0C00"},
   };
   for (const Patch& p : patches)
     if (serial == p.serial)
@@ -486,6 +489,9 @@ bool Emulator::Start(const Config& cfg, SDL_Window* window, SDL_GLContext ui_con
   if (cfg.widescreen)
     if (const char* patch = WidescreenPatch(ReadDiscSerialCached(cfg.game_path)))
       g_core.retro_cheat_set(0, true, patch);
+  // Trucos elegidos por el usuario (Opciones › Trucos).
+  for (size_t i = 0; i < m_cheats.size(); i++)
+    g_core.retro_cheat_set(static_cast<unsigned>(i + 1), true, m_cheats[i].c_str());
 
   retro_system_av_info av = {};
   g_core.retro_get_system_av_info(&av);

@@ -233,7 +233,7 @@ bool Renderer::Init(const std::string& assets_dir, std::string* error)
   if (!LoadFont(script, fonts + "KaushanScript-Regular.ttf", 60, latin, error)) return false;
   if (!LoadFont(brush, fonts + "PermanentMarker-Regular.ttf", 72, latin, error)) return false;
   // Sólo los kanji decorativos que usa la interfaz.
-  const std::vector<uint32_t> kanji_cps = DecodeUtf8("忍影闇火城天命誅刃盤絵音操");
+  const std::vector<uint32_t> kanji_cps = DecodeUtf8("忍影闇火城天命誅刃盤絵音操術");
   if (!LoadFont(kanji, fonts + "YujiSyuku-Regular.ttf", 180, kanji_cps, error)) return false;
   return true;
 }

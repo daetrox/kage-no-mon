@@ -30,6 +30,7 @@ add_executable(tenshu2
   src/gl.cpp
   src/achievements.cpp
   src/translate.cpp
+  src/cheats.cpp
   src/audio.cpp
   src/stb_vorbis_impl.c)
 target_include_directories(tenshu2 PRIVATE src ${TP}/libretro-common/include ${RC}/src/util)

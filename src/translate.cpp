@@ -284,3 +284,97 @@ std::string TranslateAchievementDescription(const std::string& d)
 
   return d;
 }
+
+std::string TranslateCheatName(const std::string& name)
+{
+  static const std::pair<const char*, const char*> table[] = {
+    // Versiones europeas (inglés) y alemana.
+    {"Infinite Air", "Aire infinito"},
+    {"Infinite Air [ALT]", "Aire infinito (alternativo)"},
+    {"Infinite Air (Alt)", "Aire infinito (alternativo)"},
+    {"Infinite Health", "Salud infinita"},
+    {"Infinite HP", "Vida infinita"},
+    {"Tatsumaru unlocked", "Tatsumaru desbloqueado"},
+    {"All levels unlocked", "Todas las misiones desbloqueadas"},
+    {"Infinite All items", "Todos los objetos infinitos"},
+    {"Ayame All items", "Ayame: todos los objetos"},
+    {"Rikimaru All items", "Rikimaru: todos los objetos"},
+    {"Tatsumaru All Items", "Tatsumaru: todos los objetos"},
+    {"Ayame Records All perfect", "Ayame: récords perfectos"},
+    {"Rikimaru Records All perfect", "Rikimaru: récords perfectos"},
+    {"Tatsumaru Records All perfect", "Tatsumaru: récords perfectos"},
+    {"Attach Grappling Hook Anywhere", "Gancho en cualquier superficie"},
+    {"Invisible to Enemies", "Invisible para los enemigos"},
+    {"Moon Jumps", "Saltos lunares"},
+    {"Have Map", "Mapa siempre disponible"},
+    {"Unlock All Extras", "Desbloquear todos los extras"},
+    {"Mission Editor", "Editor de misiones"},
+    {"Infinite Weapon Use", "Armas infinitas"},
+    {"Unlock All Stages", "Todos los escenarios"},
+    {"Unendlich Luft", "Aire infinito"},
+    {"Unendlich Gesundheit", "Salud infinita"},
+    {"Tatsumaru freigeschaltet", "Tatsumaru desbloqueado"},
+    {"Alle Level", "Todas las misiones desbloqueadas"},
+    {"Unendlich alle Gegenstände", "Todos los objetos infinitos"},
+    {"Ayame Alles perfekt", "Ayame: récords perfectos"},
+    {"Rikimaru Alle Gegenstände", "Rikimaru: todos los objetos"},
+    {"Rikimaru Alles perfekt", "Rikimaru: récords perfectos"},
+    {"Tatsumaru Alle Gegenstände", "Tatsumaru: todos los objetos"},
+    {"Tatsumaru Alles perfekt", "Tatsumaru: récords perfectos"},
+    // Versión de EE. UU. (récords por misión).
+    {"Record", "Récords"},
+    {"Grand Master Status", "Rango Gran Maestro"},
+    {"Max Kills", "Bajas al máximo"},
+    {"Max Score", "Puntuación máxima"},
+    {"Time 0.00.0/Enables Mission", "Tiempo 0:00.0 (desbloquea la misión)"},
+    {"Time 0.00.00/Enable Mission", "Tiempo 0:00.0 (desbloquea la misión)"},
+    {"All Character", "Todos los personajes"},
+    {"Have All Items", "Todos los objetos"},
+    {"Unlock Tatsumaru", "Desbloquear a Tatsumaru"},
+    {"Unlock All Mission Editor Levels", "Todos los escenarios del editor"},
+    {"Tatsumaru-Everything Perfect", "Tatsumaru: todo perfecto"},
+    // Versión japonesa.
+    {"Dragon circle available", "Círculo del dragón disponible"},
+    {"99 of each of the items in ninja tools", "99 de cada herramienta ninja"},
+    {"Dragon circle and all mission Available", "Círculo del dragón y todas las misiones"},
+    {"0 time required", "Tiempo 0"},
+    {"255 of all ninja tools", "255 de cada herramienta ninja"},
+    {"Infinite Physical strength .It is not valid for the death blow", "Vida infinita (no evita el golpe mortal)"},
+    {"Time by 32 cloak of invisibility effect", "Capa de invisibilidad prolongada"},
+    {"Cloak of invisibility effect is available in the ninja tools", "Capa de invisibilidad entre las herramientas"},
+    {"Infinite Oxygen", "Aire infinito"},
+    {"Infinite Time Cheat Sheet", "Tiempo infinito"},
+    {"All Mission Cheat Sheet", "Todas las misiones"},
+    {"Infinite Physical strength Cheat Sheet .It is not valid for the death blow.", "Vida infinita (alternativo)"},
+    {"Infinite Oxygen Cheat Sheet", "Aire infinito (alternativo)"},
+    {"Infinite Ninja tools Cheat Sheet", "Herramientas ninja infinitas"},
+  };
+  std::string out;
+  size_t start = 0;
+  while (start <= name.size())
+  {
+    const size_t end = name.find('\\', start);
+    const std::string seg = name.substr(start, end == std::string::npos ? std::string::npos : end - start);
+    std::string tr = seg;
+    bool found = false;
+    for (const auto& [en, es] : table)
+      if (seg == en)
+      {
+        tr = es;
+        found = true;
+        break;
+      }
+    if (!found)
+    {
+      if (seg.rfind("Slot ", 0) == 0)
+        tr = "Ranura " + seg.substr(5);
+      else
+        tr = Mission(seg); // nombres de misiones (o se mantiene tal cual)
+    }
+    out += (out.empty() ? "" : " · ") + tr;
+    if (end == std::string::npos)
+      break;
+    start = end + 1;
+  }
+  return out;
+}

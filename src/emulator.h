@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <vector>
 
 struct EmuInput
 {
@@ -36,6 +37,8 @@ public:
   bool LoadState(const std::string& path);
   void SetVolume(int volume) { m_volume = volume; }
   void SetRumbleTarget(SDL_GameController* pad) { m_pad = pad; }
+  // Códigos de trucos que se aplicarán en el próximo Start().
+  void SetCheats(std::vector<std::string> codes) { m_cheats = std::move(codes); }
 
   // Imagen actual del juego.
   GLuint Texture() const { return m_hw ? m_hw_texture : m_sw_texture; }
@@ -98,4 +101,5 @@ private:
   uint64_t m_frames_run = 0;
   std::string m_system_dir;
   std::string m_game_path;
+  std::vector<std::string> m_cheats;
 };

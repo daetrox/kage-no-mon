@@ -31,6 +31,7 @@ struct Config
   int music_volume = 70;         // 0..100, música del launcher
   int sfx_volume = 80;           // 0..100, efectos del launcher
   bool fast_boot = true;         // salta la intro de la BIOS
+  std::string cheats;            // nombres de los trucos activos, separados por '|'
   std::string prompt_style = "auto"; // iconos de botones: auto, keyboard, xbox, playstation
 
   void Load();

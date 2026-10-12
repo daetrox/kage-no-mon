@@ -7,3 +7,5 @@
 
 std::string TranslateAchievementTitle(const std::string& title);
 std::string TranslateAchievementDescription(const std::string& description);
+// Nombre de un truco (chtdb); los grupos "A\B" se muestran como "A · B".
+std::string TranslateCheatName(const std::string& name);
