@@ -18,8 +18,8 @@ cp "$ROOT/packaging/tenshu2.png" "$APPDIR/tenshu2.png"
 cat > "$APPDIR/tenshu2.desktop" <<DESKTOP
 [Desktop Entry]
 Type=Application
-Name=Tenshu 2
-Comment=Lanzador con núcleo SwanStation
+Name=Kage no Mon
+Comment=La Puerta de las Sombras: lanzador para Tenchu 2
 Exec=tenshu2
 Icon=tenshu2
 Categories=Game;
@@ -36,6 +36,6 @@ if [ ! -x "$TOOL" ]; then
   chmod +x "$TOOL"
 fi
 # Sin FUSE (p. ej. en GitHub Actions) la herramienta se extrae y se ejecuta sola.
-OUT="$ROOT/Tenshu2-$VERSION-x86_64.AppImage"
+OUT="$ROOT/KageNoMon-$VERSION-x86_64.AppImage"
 ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$TOOL" --no-appstream "$APPDIR" "$OUT"
 echo ">> AppImage: $OUT"
