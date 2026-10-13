@@ -1,4 +1,5 @@
 #include "renderer.h"
+#include "platform.h"
 
 #include <SDL.h>
 #include <algorithm>
@@ -41,7 +42,7 @@ std::vector<uint32_t> DecodeUtf8(const std::string& s)
 
 static bool ReadFile(const std::string& path, std::string* out)
 {
-  std::ifstream in(path, std::ios::binary);
+  std::ifstream in(Platform::Path(path), std::ios::binary);
   if (!in)
     return false;
   std::stringstream ss;
@@ -293,7 +294,11 @@ void Renderer::DrawScene(float mouse_x, float mouse_y, float intensity)
 bool Renderer::LoadTexture(const std::string& path, Texture* tex, bool mipmaps)
 {
   int w, h, n;
-  unsigned char* data = stbi_load(path.c_str(), &w, &h, &n, 4);
+  std::string file;
+  unsigned char* data = Platform::ReadWholeFile(path, &file)
+                          ? stbi_load_from_memory(reinterpret_cast<const unsigned char*>(file.data()),
+                                                  static_cast<int>(file.size()), &w, &h, &n, 4)
+                          : nullptr;
   if (!data)
   {
     SDL_Log("No se pudo cargar %s", path.c_str());

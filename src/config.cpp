@@ -1,4 +1,5 @@
 #include "config.h"
+#include "platform.h"
 
 #include <SDL_gamecontroller.h>
 #include <SDL_scancode.h>
@@ -141,7 +142,7 @@ std::string ReadDiscSerial(const std::string& image_path)
   }();
   if (lower.size() > 4 && lower.compare(lower.size() - 4, 4, ".cue") == 0)
   {
-    std::ifstream cue(image_path);
+    std::ifstream cue(Platform::Path(image_path));
     std::string line;
     bin.clear();
     while (std::getline(cue, line))
@@ -156,7 +157,7 @@ std::string ReadDiscSerial(const std::string& image_path)
       }
     }
   }
-  std::ifstream in(bin, std::ios::binary);
+  std::ifstream in(Platform::Path(bin), std::ios::binary);
   if (!in)
     return {};
   // Busca "BOOT = cdrom:\XXXX_YYY.ZZ" en los primeros sectores (imagen en bruto de 2352 bytes).
@@ -193,8 +194,8 @@ std::string ReadDiscSerial(const std::string& image_path)
 
 bool CopyFile(const std::string& from, const std::string& to)
 {
-  std::ifstream in(from, std::ios::binary);
-  std::ofstream out(to, std::ios::binary | std::ios::trunc);
+  std::ifstream in(Platform::Path(from), std::ios::binary);
+  std::ofstream out(Platform::Path(to), std::ios::binary | std::ios::trunc);
   if (!in || !out)
     return false;
   out << in.rdbuf();
@@ -252,7 +253,7 @@ void Config::DefaultPad()
 
 void Config::Load()
 {
-  std::ifstream in(ConfigFile());
+  std::ifstream in(Platform::Path(ConfigFile()));
   std::string line;
   while (std::getline(in, line))
   {
@@ -307,7 +308,7 @@ void Config::Load()
 void Config::Save() const
 {
   Paths::MakeDirs(Paths::ConfigDir());
-  std::ofstream out(ConfigFile());
+  std::ofstream out(Platform::Path(ConfigFile()));
   out << "# Tenshu 2 - configuración del launcher\n";
   out << "game_path=" << game_path << "\n";
   out << "bios_file=" << bios_file << "\n";

@@ -1,4 +1,5 @@
 #include "audio.h"
+#include "platform.h"
 
 #include <algorithm>
 #include <cmath>
@@ -17,7 +18,11 @@ bool Audio::Load(const std::string& path, Clip* clip)
 {
   int channels = 0, rate = 0;
   short* data = nullptr;
-  const int frames = stb_vorbis_decode_filename(path.c_str(), &channels, &rate, &data);
+  std::string file;
+  if (!Platform::ReadWholeFile(path, &file))
+    return false;
+  const int frames = stb_vorbis_decode_memory(reinterpret_cast<const unsigned char*>(file.data()),
+                                              static_cast<int>(file.size()), &channels, &rate, &data);
   if (frames <= 0 || !data)
   {
     SDL_Log("No se pudo cargar el audio %s", path.c_str());

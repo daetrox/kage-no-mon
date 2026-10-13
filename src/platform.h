@@ -2,9 +2,19 @@
 // que incluir <windows.h> (sus macros, como CopyFile o DrawText, chocan con nombres del proyecto).
 #pragma once
 #include <cstdio>
+#include <filesystem>
 #include <string>
 
 namespace Platform {
+// Rutas: el programa las maneja en UTF-8; para abrir archivos se convierten a std::filesystem::path
+// (en Windows, a UTF-16, así que funcionan nombres con ñ, tildes, etc. sin depender de la página
+// de códigos del sistema).
+inline std::filesystem::path Path(const std::string& utf8) { return std::filesystem::u8path(utf8); }
+FILE* OpenFile(const std::string& utf8_path, const char* mode);
+bool RemoveFile(const std::string& utf8_path);
+bool RenameFile(const std::string& from, const std::string& to); // sustituye el destino si existe
+bool ReadWholeFile(const std::string& utf8_path, std::string* out);
+
 // Bibliotecas dinámicas (el núcleo libretro).
 void* OpenLibrary(const std::string& path);
 void* LibrarySymbol(void* lib, const char* name);

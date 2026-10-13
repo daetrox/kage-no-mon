@@ -14,6 +14,42 @@
 
 namespace Platform {
 
+FILE* OpenFile(const std::string& utf8_path, const char* mode)
+{
+#ifdef _WIN32
+  return _wfopen(Path(utf8_path).wstring().c_str(), Path(mode).wstring().c_str());
+#else
+  return std::fopen(utf8_path.c_str(), mode);
+#endif
+}
+
+bool ReadWholeFile(const std::string& utf8_path, std::string* out)
+{
+  FILE* f = OpenFile(utf8_path, "rb");
+  if (!f)
+    return false;
+  out->clear();
+  char buf[65536];
+  size_t n;
+  while ((n = std::fread(buf, 1, sizeof(buf), f)) > 0)
+    out->append(buf, n);
+  std::fclose(f);
+  return true;
+}
+
+bool RemoveFile(const std::string& utf8_path)
+{
+  std::error_code ec;
+  return std::filesystem::remove(Path(utf8_path), ec);
+}
+
+bool RenameFile(const std::string& from, const std::string& to)
+{
+  std::error_code ec;
+  std::filesystem::rename(Path(from), Path(to), ec);
+  return !ec;
+}
+
 #ifdef _WIN32
 static std::wstring Wide(const std::string& s)
 {

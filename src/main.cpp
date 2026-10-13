@@ -391,7 +391,7 @@ std::string BiosLabel(const std::string& file)
     {"6e3735ff4c7dc899ee98981385f6f3d0", "SCPH-101 · EE. UU."},
   };
   std::string label = file;
-  if (FILE* f = std::fopen((Paths::BiosDir() + "/" + file).c_str(), "rb"))
+  if (FILE* f = Platform::OpenFile((Paths::BiosDir() + "/" + file).c_str(), "rb"))
   {
     std::vector<unsigned char> data(512 * 1024);
     const size_t n = std::fread(data.data(), 1, data.size(), f);
@@ -1805,7 +1805,7 @@ void App::HandleEvent(const SDL_Event& e)
     {
       const std::string path = e.drop.file;
       SDL_free(e.drop.file);
-      FILE* f = std::fopen(path.c_str(), "rb");
+      FILE* f = Platform::OpenFile(path.c_str(), "rb");
       long size = 0;
       if (f)
       {
@@ -1905,7 +1905,7 @@ void App::HandleEvent(const SDL_Event& e)
             char name[64];
             const time_t t = std::time(nullptr);
             std::strftime(name, sizeof(name), "/ram-%Y%m%d-%H%M%S.bin", std::localtime(&t));
-            if (FILE* f = std::fopen((dir + name).c_str(), "wb"))
+            if (FILE* f = Platform::OpenFile((dir + name).c_str(), "wb"))
             {
               std::fwrite(ram, 1, n, f);
               std::fclose(f);
@@ -3675,7 +3675,7 @@ int App::Run(int argc, char** argv)
       std::vector<unsigned char> px(static_cast<size_t>(m_w) * m_h * 3);
       glPixelStorei(GL_PACK_ALIGNMENT, 1);
       glReadPixels(0, 0, m_w, m_h, GL_RGB, GL_UNSIGNED_BYTE, px.data());
-      if (FILE* f = std::fopen(path.c_str(), "wb"))
+      if (FILE* f = Platform::OpenFile(path.c_str(), "wb"))
       {
         std::fprintf(f, "P6\n%d %d\n255\n", m_w, m_h);
         for (int y = m_h - 1; y >= 0; y--)
@@ -3798,7 +3798,7 @@ int App::Run(int argc, char** argv)
           {
             size_t n = 0;
             if (const uint8_t* ram = m_emu.SystemRam(&n))
-              if (FILE* f = std::fopen((m_screenshot_path + "." + std::to_string(shot) + ".ram").c_str(), "wb"))
+              if (FILE* f = Platform::OpenFile((m_screenshot_path + "." + std::to_string(shot) + ".ram").c_str(), "wb"))
               {
                 std::fwrite(ram, 1, n, f);
                 std::fclose(f);
@@ -3932,7 +3932,7 @@ int main(int argc, char** argv)
     const auto xb = PreviewGameButtons(GameButtonStyle::Xbox, cfg);
     const auto kb = PreviewGameButtons(GameButtonStyle::Keyboard, cfg);
     const int h = static_cast<int>(xb.size() / 16);
-    if (FILE* f = std::fopen(out, "wb"))
+    if (FILE* f = Platform::OpenFile(out, "wb"))
     {
       std::fprintf(f, "P6 %d %d 255\n", 34, h);
       for (int y = 0; y < h; y++)

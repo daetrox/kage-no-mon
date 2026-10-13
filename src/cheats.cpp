@@ -1,4 +1,5 @@
 #include "cheats.h"
+#include "platform.h"
 #include "translate.h"
 
 #include <cctype>
@@ -35,7 +36,7 @@ std::vector<Cheat> LoadCheats(const std::string& assets_dir, const std::string& 
   std::vector<Cheat> out;
   if (serial.empty())
     return out;
-  std::ifstream in(assets_dir + "/cheats/" + serial + ".cht");
+  std::ifstream in(Platform::Path(assets_dir + "/cheats/" + serial + ".cht"));
   std::string line;
   Cheat cur;
   auto flush = [&]() {

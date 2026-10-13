@@ -28,7 +28,7 @@ Achievements* g_active = nullptr; // sesión con el runtime activo (callbacks si
 
 std::string ReadAll(const std::string& path)
 {
-  std::ifstream in(path, std::ios::binary);
+  std::ifstream in(Platform::Path(path), std::ios::binary);
   std::stringstream ss;
   ss << in.rdbuf();
   return ss.str();
@@ -79,11 +79,10 @@ bool CurlFetch(const std::string& url, const std::string& post_data, const std::
   const int status = Platform::ClosePipe(p);
   if (status != 0)
   {
-    std::remove(tmp.c_str());
+    Platform::RemoveFile(tmp);
     return false;
   }
-  std::remove(out_path.c_str()); // en Windows rename no sustituye un archivo existente
-  return std::rename(tmp.c_str(), out_path.c_str()) == 0;
+  return Platform::RenameFile(tmp, out_path);
 }
 
 uint32_t ReadMemory(uint32_t address, uint8_t* buffer, uint32_t num_bytes, void* ud)
@@ -130,7 +129,7 @@ void Achievements::SetGame(const std::string& game_path)
   m_hash = hash;
 
   // Caché hash -> id de juego.
-  std::ifstream idx(Paths::DataDir() + "/achievements/hashes.txt");
+  std::ifstream idx(Platform::Path(Paths::DataDir() + "/achievements/hashes.txt"));
   std::string h;
   uint32_t id;
   while (idx >> h >> id)
@@ -177,7 +176,7 @@ bool Achievements::LoadCache()
 void Achievements::LoadUnlocks()
 {
   // Una línea por logro: "id fecha [h]" (h = conseguido en modo hardcore).
-  std::ifstream in(GameDir() + "/unlocks.txt");
+  std::ifstream in(Platform::Path(GameDir() + "/unlocks.txt"));
   std::string line;
   bool stale = false;
   while (std::getline(in, line))
@@ -207,7 +206,7 @@ void Achievements::LoadUnlocks()
 
 void Achievements::SaveUnlocks() const
 {
-  std::ofstream out(GameDir() + "/unlocks.txt", std::ios::trunc);
+  std::ofstream out(Platform::Path(GameDir() + "/unlocks.txt"), std::ios::trunc);
   for (const Achievement& a : m_list)
     if (a.unlocked)
       out << a.id << " " << a.unlock_time << (a.hardcore ? " h" : "") << "\n";
@@ -364,7 +363,7 @@ void Achievements::DownloadThread(std::string user, std::string password)
   if (!CurlFetch(kServer, "r=login2&u=" + UrlEncode(user) + "&p=" + UrlEncode(password), tmp) ||
       !JsonParser::Parse(ReadAll(tmp), &root))
     return fail("No se pudo iniciar sesión (sin respuesta del servidor).");
-  std::remove(tmp.c_str());
+  Platform::RemoveFile(tmp);
   if (root["Success"].type != JsonValue::Type::Bool || !root["Success"].b)
   {
     const std::string err = root["Error"].AsString();
@@ -399,7 +398,7 @@ void Achievements::DownloadThread(std::string user, std::string password)
 
   // Guardar hash -> id.
   {
-    std::ofstream idx(base + "/hashes.txt", std::ios::app);
+    std::ofstream idx(Platform::Path(base + "/hashes.txt"), std::ios::app);
     idx << m_hash << " " << game_id << "\n";
   }
   {
@@ -499,7 +498,7 @@ void Achievements::LogEvent(int type, uint32_t id)
     default: return;
   }
   const Achievement* a = Find(id);
-  std::ofstream log(GameDir() + "/eventos.log", std::ios::app);
+  std::ofstream log(Platform::Path(GameDir() + "/eventos.log"), std::ios::app);
   char when[32];
   const time_t t = std::time(nullptr);
   std::strftime(when, sizeof(when), "%Y-%m-%d %H:%M:%S", std::localtime(&t));

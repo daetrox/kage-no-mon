@@ -760,7 +760,7 @@ bool Emulator::SaveState(const std::string& path)
   MakeUiCurrent();
   if (!ok)
     return false;
-  std::ofstream out(path, std::ios::binary | std::ios::trunc);
+  std::ofstream out(Platform::Path(path), std::ios::binary | std::ios::trunc);
   out.write(reinterpret_cast<const char*>(buf.data()), static_cast<std::streamsize>(buf.size()));
   return static_cast<bool>(out);
 }
@@ -769,7 +769,7 @@ bool Emulator::LoadState(const std::string& path)
 {
   if (!m_running)
     return false;
-  std::ifstream in(path, std::ios::binary);
+  std::ifstream in(Platform::Path(path), std::ios::binary);
   if (!in)
     return false;
   std::vector<uint8_t> buf((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
@@ -811,7 +811,7 @@ void Emulator::LoadButtonOriginals()
     return;
   for (const GameUpload& u : GameButtonUploads())
   {
-    FILE* f = std::fopen(OriginalPath(u).c_str(), "rb");
+    FILE* f = Platform::OpenFile(OriginalPath(u).c_str(), "rb");
     if (!f)
       continue;
     uint32_t wh[2] = {};
@@ -841,7 +841,7 @@ void Emulator::SaveButtonOriginals()
     std::vector<uint16_t> data(n);
     m_kage_get_original(u.hash_low, u.hash_high, &w, &h, data.data(), n);
     Paths::MakeDirs(Paths::DataDir() + "/texturas");
-    if (FILE* f = std::fopen(path.c_str(), "wb"))
+    if (FILE* f = Platform::OpenFile(path.c_str(), "wb"))
     {
       const uint32_t wh[2] = {w, h};
       std::fwrite(wh, 4, 2, f);
