@@ -670,8 +670,6 @@ private:
   float m_test_rstick[2] = {}; // pruebas: joystick derecho simulado
   float m_test_lstick[2] = {}; // y el izquierdo
   float m_move[2] = {};        // dirección pedida para los controles 360° (relativa a la cámara)
-  float m_guard_wait = 0;      // segundos que la guardia automática espera tras un botón de acción
-  bool m_guarding = false;     // la guardia automática está pulsando «atrás»
   float m_credits_scroll = 0, m_credits_target = 0;
   float m_credits_height = 0; // alto total del texto de créditos (px de la ilustración)
   int m_remap_device = 0;   // 0 teclado, 1 mando
@@ -944,8 +942,16 @@ void App::StartGame(bool resume)
   SDL_GL_SwapWindow(m_window);
 
   m_audio.Play(Sfx::Start);
-  const std::vector<std::string> cheats = m_hardcore_session ? std::vector<std::string>{} : ActiveCheatCodes();
+  std::vector<std::string> cheats = m_hardcore_session ? std::vector<std::string>{} : ActiveCheatCodes();
   m_cheats_active = !cheats.empty();
+  // Bloqueo con la pose de pie con el arma fuera (movimiento 360°); no es un truco: no pausa logros.
+  if (!m_hardcore_session)
+  {
+    m_freecam.SetGame(m_cfg.free_camera ? Paths::ReadDiscSerial(m_cfg.game_path) : "");
+    const std::string block = FreeCamera::BlockPatch(Paths::ReadDiscSerial(m_cfg.game_path), ModernControls());
+    if (!block.empty())
+      cheats.push_back(block);
+  }
   m_emu.SetCheats(cheats);
   m_emu.SetButtonPatches(GameButtonPatches());
   // Cámara libre: sólo fuera del modo hardcore (escribe en la RAM del juego).
@@ -1019,7 +1025,7 @@ void App::StartGame(bool resume)
     m_freecam.Frame(const_cast<uint8_t*>(ram), n, m_last_input.analog[1][0] / 32767.0f,
                     m_last_input.analog[1][1] / 32767.0f, r3 && !m_r3_was_down, ModernControls(), dt);
     if (ModernControls())
-      m_freecam.Steer(const_cast<uint8_t*>(ram), n, m_move[0], m_move[1], m_guarding, dt);
+      m_freecam.Steer(const_cast<uint8_t*>(ram), n, m_move[0], m_move[1], dt);
     m_r3_was_down = r3;
     m_ach.DoFrame(ram, n);
   };
@@ -1696,7 +1702,6 @@ EmuInput App::GatherGameInput()
   // relativa a la cámara; el personaje se orienta hacia ella (FreeCamera::Steer) y aquí sólo se
   // pide «adelante». Fuera de los modos de movimiento normales llegan los controles originales.
   m_move[0] = m_move[1] = 0;
-  m_guarding = false;
   if (ModernControls())
   {
     float mx = in.analog[0][0] / 32767.0f, my = in.analog[0][1] / 32767.0f;
@@ -1714,21 +1719,8 @@ EmuInput App::GatherGameInput()
                             (1u << RETRO_DEVICE_ID_JOYPAD_LEFT) | (1u << RETRO_DEVICE_ID_JOYPAD_RIGHT);
       in.buttons &= static_cast<uint16_t>(~dirs);
       in.analog[0][0] = in.analog[0][1] = 0;
-      // Botones de acción (ataque, salto, objetos, L/R): con ellos no se fuerza la guardia.
-      const uint16_t actions = (1u << RETRO_DEVICE_ID_JOYPAD_B) | (1u << RETRO_DEVICE_ID_JOYPAD_A) |
-                               (1u << RETRO_DEVICE_ID_JOYPAD_X) | (1u << RETRO_DEVICE_ID_JOYPAD_Y) |
-                               (1u << RETRO_DEVICE_ID_JOYPAD_L) | (1u << RETRO_DEVICE_ID_JOYPAD_R) |
-                               (1u << RETRO_DEVICE_ID_JOYPAD_L2) | (1u << RETRO_DEVICE_ID_JOYPAD_R2);
       if (mx * mx + my * my >= 0.25f * 0.25f)
         in.buttons |= static_cast<uint16_t>(1u << RETRO_DEVICE_ID_JOYPAD_UP);
-      else if (m_freecam.Armed() && !(in.buttons & actions) && m_guard_wait <= 0)
-      {
-        in.buttons |= static_cast<uint16_t>(1u << RETRO_DEVICE_ID_JOYPAD_DOWN); // quieto con el arma: guardia
-        m_guarding = true;
-      }
-      // Tras un botón de acción la guardia espera un poco (envainar es ○ dos veces seguidas, combos…).
-      if (in.buttons & actions)
-        m_guard_wait = 0.6f;
     }
   }
   m_last_input = in;
@@ -2217,7 +2209,6 @@ void App::Update(float dt)
     m_mouse_idle += dt;
     if (m_mouse_idle > 2.0f && !m_paused)
       SDL_ShowCursor(SDL_DISABLE);
-    m_guard_wait = std::max(0.0f, m_guard_wait - dt);
     m_emu.Tick(GatherGameInput());
     for (uint32_t id : m_ach.TakeNewUnlocks())
     {

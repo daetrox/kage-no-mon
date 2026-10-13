@@ -30,12 +30,12 @@ public:
   // -1..1, relativa a la cámara: arriba = hacia dentro de la pantalla). Sólo con la cámara libre
   // activa y el personaje en un modo de movimiento normal; si no, Steerable() es false y el juego
   // recibe los controles originales.
-  // guard = el launcher mantiene la guardia automática (arma fuera, quieto): el juego sólo la tiene
-  // andando hacia atrás (acción 0x104), así que se deja al personaje en el sitio.
-  void Steer(uint8_t* ram, size_t size, float move_x, float move_y, bool guard, float dt);
+  void Steer(uint8_t* ram, size_t size, float move_x, float move_y, float dt);
   bool Steerable() const { return m_steerable; }
-  // Con el arma desenvainada (según el último Steer): quieto, el personaje se pone en guardia.
-  bool Armed() const { return m_armed; }
+  // Códigos (formato GameShark) que hacen que, con el movimiento 360°, el jugador bloquee los golpes
+  // de pie con el arma desenvainada, en su pose normal (sin ellos sólo bloquea andando hacia atrás,
+  // y al azar); con los controles de tanque, los que restauran el código original. "" si no hay.
+  static std::string BlockPatch(const std::string& serial, bool modern);
   void SetSpeed(float factor) { m_speed = factor; } // 1 = velocidad normal
   bool Active() const { return m_active; }
   // Devuelve la tabla y el suavizado del juego a su estado original (antes de guardar un estado, al
@@ -62,9 +62,6 @@ private:
   bool m_active = false;
   bool m_returning = false; // tras R3: girando hasta quedar detrás del personaje
   bool m_steerable = false; // controles 360° aplicables en el frame siguiente
-  bool m_armed = false;     // el personaje tiene el arma desenvainada
-  bool m_guard_hold = false; // guardia automática en curso: posición fijada
-  int32_t m_guard_pos[3] = {};
   float m_steer_yaw = 0;    // giro actual del personaje con los controles 360° (radianes)
   float m_world_yaw = 0, m_pitch = 0;       // orientación elegida (radianes)
   float m_dist = 0, m_height = 0;           // distancia horizontal y altura respecto a la cabeza

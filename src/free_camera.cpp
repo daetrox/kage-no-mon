@@ -34,9 +34,6 @@ constexpr float kTargetJump = 2500.0f; // un salto así del objetivo = cinemáti
 constexpr float kTau = 6.28318530718f;
 // El juego coloca la tabla sobre la posición del personaje elevada 0x73A (0x80051FB4).
 constexpr float kBaseHeight = 0x73A;
-// Fotograma de la animación de la guardia (andar hacia atrás) que se usa como pose quieta: los dos
-// pies apoyados y separados.
-constexpr int16_t kGuardFrame = 4;
 // Distancia ante un muro: se acerca deprisa y se aleja despacio (fracción por segundo, aprox.).
 constexpr float kPullIn = 14.0f, kPullOut = 2.5f, kHeightRate = 6.0f;
 
@@ -328,7 +325,7 @@ void FreeCamera::Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, 
   m_have_written = true;
 }
 
-void FreeCamera::Steer(uint8_t* ram, size_t size, float move_x, float move_y, bool guard, float dt)
+void FreeCamera::Steer(uint8_t* ram, size_t size, float move_x, float move_y, float dt)
 {
   m_steerable = false;
   if (!ram || !Available() || !m_active || m_returning || m_mode + 2 > size || !FollowMode(Get16(ram, m_mode)))
@@ -338,32 +335,6 @@ void FreeCamera::Steer(uint8_t* ram, size_t size, float move_x, float move_y, bo
   if (!rot || rot + 4 > size)
     return;
   m_steerable = true;
-  // Acción del personaje (+0x78): el byte alto 0x01 = con el arma desenvainada (0x100 quieto,
-  // 0x103 corriendo…); 0x700/0x701 = desenvainando/envainando.
-  const uint16_t action = obj + 0x7A <= size ? static_cast<uint16_t>(Get16(ram, obj + 0x78)) : 0;
-  m_armed = (action & 0xFF00) == 0x100;
-  // Guardia automática: el juego la hace andando hacia atrás (0x104); se fija la posición (X y Z)
-  // para que el personaje bloquee sin moverse.
-  const uint32_t posp = obj + 0x30 <= size ? Get32(ram, obj + 0x2C) & 0x1FFFFF : 0;
-  if (guard && m_armed && posp && posp + 12 <= size)
-  {
-    if (!m_guard_hold)
-    {
-      std::memcpy(m_guard_pos, ram + posp, sizeof(m_guard_pos));
-      m_guard_hold = true;
-    }
-    if (action == 0x104)
-    {
-      std::memcpy(ram + posp, &m_guard_pos[0], 4);
-      std::memcpy(ram + posp + 8, &m_guard_pos[2], 4);
-      // Pose fija: el fotograma de la animación (+0x7A, ciclo de 16) no avanza.
-      std::memcpy(ram + obj + 0x7A, &kGuardFrame, 2);
-    }
-  }
-  else
-  {
-    m_guard_hold = false;
-  }
   const float mag = std::sqrt(move_x * move_x + move_y * move_y);
   const float current = (Get16(ram, rot + 2) & 0xFFF) * kTau / 4096.0f;
   if (mag < 0.25f)
@@ -380,4 +351,41 @@ void FreeCamera::Steer(uint8_t* ram, size_t size, float move_x, float move_y, bo
   const int16_t value = static_cast<int16_t>(static_cast<int>(std::lround(yaw / kTau * 4096.0f)) & 0xFFF);
   std::memcpy(ram + rot + 2, &value, 2);
   m_steer_yaw = yaw;
+}
+
+std::string FreeCamera::BlockPatch(const std::string& serial, bool modern)
+{
+  // Función del daño (0x80020A..): para el personaje golpeado, si su acción es 0x104 (guardia: andar
+  // hacia atrás con el arma) el golpe se bloquea. Para el jugador hay además una rama propia
+  // (0x80020B74-0x80020BB4) que, con el arma fuera, bloquea al azar 1 de cada 3 golpes según un valor
+  // del personaje (+0x12). Con el movimiento 360° nunca se anda hacia atrás, así que esa rama se
+  // reescribe para que el jugador bloquee siempre que esté de pie con el arma fuera (acción 0x100,
+  // su pose normal):
+  //   0x80020B74  lh   v0, 0x12(a0)  →  lh   v0, 0x78(a0)      acción del jugador
+  //   0x80020B7C  slti v0, v0, 5     →  xori v0, v0, 0x100     0 si está de pie con el arma fuera
+  //   0x80020B80  bnez v0, no-bloquea   (sin cambios)
+  //   0x80020B88  jal  0x8007DB50    →  j    0x80020BB8        bloquea
+  // Los enemigos no pasan por esa rama. Se escribe como códigos GameShark (el núcleo invalida el código
+  // recompilado), cada uno condicionado a la instrucción «lui a0, 0x8009» de 0x80020B1C. Con los
+  // controles de tanque se escriben los valores originales, por si un estado guardado los trae
+  // cambiados (también 0x80020B00, que una versión de prueba cambiaba).
+  if (serial != "SLES-02465")
+    return "";
+  static const struct
+  {
+    uint32_t addr;
+    uint16_t original, patched;
+  } kWrites[] = {
+    {0x80020B74, 0x0012, 0x0078}, {0x80020B7C, 0x0005, 0x0100}, {0x80020B7E, 0x2842, 0x3842},
+    {0x80020B88, 0xF6D4, 0x82EE}, {0x80020B8A, 0x0C01, 0x0800}, {0x80020B00, 0x0104, 0x0104},
+  };
+  std::string code;
+  char line[64];
+  for (const auto& w : kWrites)
+  {
+    std::snprintf(line, sizeof(line), "%sD0020B1E 3C04+%08X %04X", code.empty() ? "" : "+",
+                  0x80000000u | (w.addr & 0xFFFFFF), modern ? w.patched : w.original);
+    code += line;
+  }
+  return code;
 }
