@@ -325,7 +325,7 @@ void FreeCamera::Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, 
   m_have_written = true;
 }
 
-void FreeCamera::Steer(uint8_t* ram, size_t size, float move_x, float move_y, float dt)
+void FreeCamera::Steer(uint8_t* ram, size_t size, float move_x, float move_y, bool guard, float dt)
 {
   m_steerable = false;
   if (!ram || !Available() || !m_active || m_returning || m_mode + 2 > size || !FollowMode(Get16(ram, m_mode)))
@@ -337,7 +337,28 @@ void FreeCamera::Steer(uint8_t* ram, size_t size, float move_x, float move_y, fl
   m_steerable = true;
   // Acción del personaje (+0x78): el byte alto 0x01 = con el arma desenvainada (0x100 quieto,
   // 0x103 corriendo…); 0x700/0x701 = desenvainando/envainando.
-  m_armed = obj + 0x7A <= size && (static_cast<uint16_t>(Get16(ram, obj + 0x78)) & 0xFF00) == 0x100;
+  const uint16_t action = obj + 0x7A <= size ? static_cast<uint16_t>(Get16(ram, obj + 0x78)) : 0;
+  m_armed = (action & 0xFF00) == 0x100;
+  // Guardia automática: el juego la hace andando hacia atrás (0x104); se fija la posición (X y Z)
+  // para que el personaje bloquee sin moverse.
+  const uint32_t posp = obj + 0x30 <= size ? Get32(ram, obj + 0x2C) & 0x1FFFFF : 0;
+  if (guard && m_armed && posp && posp + 12 <= size)
+  {
+    if (!m_guard_hold)
+    {
+      std::memcpy(m_guard_pos, ram + posp, sizeof(m_guard_pos));
+      m_guard_hold = true;
+    }
+    if (action == 0x104)
+    {
+      std::memcpy(ram + posp, &m_guard_pos[0], 4);
+      std::memcpy(ram + posp + 8, &m_guard_pos[2], 4);
+    }
+  }
+  else
+  {
+    m_guard_hold = false;
+  }
   const float mag = std::sqrt(move_x * move_x + move_y * move_y);
   const float current = (Get16(ram, rot + 2) & 0xFFF) * kTau / 4096.0f;
   if (mag < 0.25f)
