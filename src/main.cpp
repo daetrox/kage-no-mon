@@ -329,6 +329,7 @@ enum OptRow
   OPT_GAME_PROMPTS,
   OPT_FREE_CAMERA,
   OPT_CAMERA_SPEED,
+  OPT_MOVEMENT,
   OPT_REMAP_KB,
   OPT_REMAP_PAD,
   OPT_RESET_CONTROLS,
@@ -358,7 +359,7 @@ const std::vector<int>& OptPageRows(int page)
     {OPT_RENDERER, OPT_SCALE, OPT_TEXFILTER, OPT_PGXP, OPT_WIDESCREEN, OPT_SIDEART, OPT_SMOOTH, OPT_FULLSCREEN,
      OPT_BACK},
     {OPT_VOLUME, OPT_MUSIC, OPT_SFX, OPT_BACK},
-    {OPT_PROMPTS, OPT_GAME_PROMPTS, OPT_FREE_CAMERA, OPT_CAMERA_SPEED, OPT_REMAP_KB, OPT_REMAP_PAD, OPT_RESET_CONTROLS, OPT_CONTROLS, OPT_BACK},
+    {OPT_PROMPTS, OPT_GAME_PROMPTS, OPT_MOVEMENT, OPT_FREE_CAMERA, OPT_CAMERA_SPEED, OPT_REMAP_KB, OPT_REMAP_PAD, OPT_RESET_CONTROLS, OPT_CONTROLS, OPT_BACK},
     {OPT_BACK}, // TRUCOS tiene su propia pantalla
   };
   return pages[std::clamp(page, 0, kOptCategoryCount - 1)];
@@ -548,6 +549,9 @@ private:
     return Paths::StatesDir() + "/" + StemName(m_cfg.game_path) + ".state";
   }
   bool HasResumeState() const { return Paths::FileExists(StatePath()); }
+  // Controles 360° (necesitan la cámara libre: con la cámara del juego detrás del personaje, correr
+  // hacia un lado haría girar a ambos en círculo).
+  bool ModernControls() const { return m_cfg.modern_controls && m_freecam.Available(); }
   // Guarda el estado con la tabla de cámara original (ver FreeCamera::Restore).
   bool SaveStateNow()
   {
@@ -658,12 +662,14 @@ private:
   int m_cheat_sel = 0;
   float m_cheat_scroll = 0;
   bool m_cheats_active = false;    // la partida en curso usa trucos: logros en pausa
-  bool m_hardcore_session = false;
+  bool m_hardcore_session = false; // la partida en curso es hardcore: sin estados guardados
   bool m_test_saved = false;
   FreeCamera m_freecam;
   EmuInput m_last_input;       // lo último enviado al juego (para la cámara libre)
   bool m_r3_was_down = false;
-  float m_test_rstick[2] = {}; // pruebas: joystick derecho simulado // la partida en curso es hardcore: sin estados guardados
+  float m_test_rstick[2] = {}; // pruebas: joystick derecho simulado
+  float m_test_lstick[2] = {}; // y el izquierdo
+  float m_move[2] = {};        // dirección pedida para los controles 360° (relativa a la cámara)
   float m_credits_scroll = 0, m_credits_target = 0;
   float m_credits_height = 0; // alto total del texto de créditos (px de la ilustración)
   int m_remap_device = 0;   // 0 teclado, 1 mando
@@ -1007,9 +1013,11 @@ void App::StartGame(bool resume)
     }
     // Cámara libre con el joystick derecho (R3 = cámara del juego).
     const bool r3 = m_last_input.buttons & (1u << RETRO_DEVICE_ID_JOYPAD_R3);
+    const float dt = static_cast<float>(1.0 / m_emu.TargetFps());
     m_freecam.Frame(const_cast<uint8_t*>(ram), n, m_last_input.analog[1][0] / 32767.0f,
-                    m_last_input.analog[1][1] / 32767.0f, r3 && !m_r3_was_down,
-                    static_cast<float>(1.0 / m_emu.TargetFps()));
+                    m_last_input.analog[1][1] / 32767.0f, r3 && !m_r3_was_down, ModernControls(), dt);
+    if (ModernControls())
+      m_freecam.Steer(const_cast<uint8_t*>(ram), n, m_move[0], m_move[1], dt);
     m_r3_was_down = r3;
     m_ach.DoFrame(ram, n);
   };
@@ -1276,6 +1284,7 @@ void App::OptionChange(int row, int dir)
       break;
     case OPT_GAME_PROMPTS: m_cfg.game_prompts = !m_cfg.game_prompts; break;
     case OPT_FREE_CAMERA: m_cfg.free_camera = !m_cfg.free_camera; break;
+    case OPT_MOVEMENT: m_cfg.modern_controls = !m_cfg.modern_controls; break;
     case OPT_CAMERA_SPEED:
       m_cfg.camera_speed = activate ? (m_cfg.camera_speed >= 300 ? 20 : m_cfg.camera_speed + 10)
                                     : std::clamp(m_cfg.camera_speed + dir * 10, 20, 300);
@@ -1671,10 +1680,40 @@ EmuInput App::GatherGameInput()
     in.analog[1][0] = ax(SDL_CONTROLLER_AXIS_RIGHTX);
     in.analog[1][1] = ax(SDL_CONTROLLER_AXIS_RIGHTY);
   }
+  if (m_test_lstick[0] != 0 || m_test_lstick[1] != 0)
+  {
+    in.analog[0][0] = static_cast<int16_t>(m_test_lstick[0] * 32767);
+    in.analog[0][1] = static_cast<int16_t>(m_test_lstick[1] * 32767);
+  }
   if (m_test_rstick[0] != 0 || m_test_rstick[1] != 0)
   {
     in.analog[1][0] = static_cast<int16_t>(m_test_rstick[0] * 32767);
     in.analog[1][1] = static_cast<int16_t>(m_test_rstick[1] * 32767);
+  }
+  // Controles 360°: la dirección del joystick izquierdo (o de la cruceta / teclas de dirección) es
+  // relativa a la cámara; el personaje se orienta hacia ella (FreeCamera::Steer) y aquí sólo se
+  // pide «adelante». Fuera de los modos de movimiento normales llegan los controles originales.
+  m_move[0] = m_move[1] = 0;
+  if (ModernControls())
+  {
+    float mx = in.analog[0][0] / 32767.0f, my = in.analog[0][1] / 32767.0f;
+    if (mx * mx + my * my < 0.25f * 0.25f)
+    {
+      const auto bit = [&](unsigned id) { return (in.buttons >> id) & 1 ? 1.0f : 0.0f; };
+      mx = bit(RETRO_DEVICE_ID_JOYPAD_RIGHT) - bit(RETRO_DEVICE_ID_JOYPAD_LEFT);
+      my = bit(RETRO_DEVICE_ID_JOYPAD_DOWN) - bit(RETRO_DEVICE_ID_JOYPAD_UP);
+    }
+    m_move[0] = mx;
+    m_move[1] = my;
+    if (m_freecam.Steerable())
+    {
+      const uint16_t dirs = (1u << RETRO_DEVICE_ID_JOYPAD_UP) | (1u << RETRO_DEVICE_ID_JOYPAD_DOWN) |
+                            (1u << RETRO_DEVICE_ID_JOYPAD_LEFT) | (1u << RETRO_DEVICE_ID_JOYPAD_RIGHT);
+      in.buttons &= static_cast<uint16_t>(~dirs);
+      in.analog[0][0] = in.analog[0][1] = 0;
+      if (mx * mx + my * my >= 0.25f * 0.25f)
+        in.buttons |= static_cast<uint16_t>(1u << RETRO_DEVICE_ID_JOYPAD_UP);
+    }
   }
   m_last_input = in;
   return in;
@@ -2796,6 +2835,13 @@ void App::RenderOptions()
                 !known ? "No disponible para este disco" : m_cfg.hardcore ? "No (modo hardcore)" : yesno(m_cfg.free_camera),
                 known && !m_cfg.hardcore, known && !m_cfg.hardcore};
       }
+      case OPT_MOVEMENT:
+      {
+        FreeCamera probe;
+        const bool ok = probe.SetGame(Paths::ReadDiscSerial(m_cfg.game_path)) && !m_cfg.hardcore && m_cfg.free_camera;
+        return {"Movimiento", !ok ? "Clásico (tanque)" : m_cfg.modern_controls ? "360° (relativo a la cámara)" : "Clásico (tanque)",
+                ok, ok};
+      }
       case OPT_CAMERA_SPEED:
       {
         FreeCamera probe;
@@ -2924,6 +2970,9 @@ void App::RenderOptions()
     case OPT_MUSIC: help = "Música del launcher (menús y pausa)."; break;
     case OPT_SFX: help = "Sonidos del launcher al moverte, elegir y cancelar."; break;
     case OPT_PROMPTS: help = "Iconos de botones del launcher. Automático cambia según uses teclado o mando."; break;
+    case OPT_MOVEMENT:
+      help = "360°: corre hacia donde empujas el joystick, según la cámara. Clásico: controles de tanque.";
+      break;
     case OPT_CAMERA_SPEED:
       help = "Lo rápido que gira la cámara libre con el joystick derecho. 100% es la velocidad normal; también "
              "puedes hacer clic en la barra.";
@@ -3688,18 +3737,23 @@ int App::Run(int argc, char** argv)
           if (el >= std::atof(sv) && !m_test_saved)
             m_test_saved = SaveStateNow();
         // TENSHU_TEST_RSTICK="2:4:1:0,5:6:0:-1" mueve el joystick derecho (inicio:fin:x:y).
-        m_test_rstick[0] = m_test_rstick[1] = 0;
-        if (const char* rs = std::getenv("TENSHU_TEST_RSTICK"))
+        // TENSHU_TEST_LSTICK igual para el joystick izquierdo.
+        for (int side = 0; side < 2; side++)
         {
-          std::stringstream ss(rs);
-          std::string item;
-          while (std::getline(ss, item, ','))
+          float* stick = side ? m_test_lstick : m_test_rstick;
+          stick[0] = stick[1] = 0;
+          if (const char* rs = std::getenv(side ? "TENSHU_TEST_LSTICK" : "TENSHU_TEST_RSTICK"))
           {
-            float t0 = 0, t1 = 0, x = 0, y = 0;
-            if (std::sscanf(item.c_str(), "%f:%f:%f:%f", &t0, &t1, &x, &y) == 4 && el >= t0 && el < t1)
+            std::stringstream ss(rs);
+            std::string item;
+            while (std::getline(ss, item, ','))
             {
-              m_test_rstick[0] = x;
-              m_test_rstick[1] = y;
+              float t0 = 0, t1 = 0, x = 0, y = 0;
+              if (std::sscanf(item.c_str(), "%f:%f:%f:%f", &t0, &t1, &x, &y) == 4 && el >= t0 && el < t1)
+              {
+                stick[0] = x;
+                stick[1] = y;
+              }
             }
           }
         }

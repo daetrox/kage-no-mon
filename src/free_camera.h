@@ -23,8 +23,15 @@ public:
   bool SetGame(const std::string& serial);
   bool Available() const { return m_table_begin != 0; }
 
-  // Tras cada frame emulado. stick_x/stick_y en -1..1; reset = R3 recién pulsado.
-  void Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, bool reset, float dt);
+  // Tras cada frame emulado. stick_x/stick_y en -1..1; reset = R3 recién pulsado; keep = mantener
+  // la cámara libre aunque no se toque el joystick (controles 360°).
+  void Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, bool reset, bool keep, float dt);
+  // Controles 360° (tras Frame): orienta al personaje hacia la dirección pedida (move_x/move_y en
+  // -1..1, relativa a la cámara: arriba = hacia dentro de la pantalla). Sólo con la cámara libre
+  // activa y el personaje en un modo de movimiento normal; si no, Steerable() es false y el juego
+  // recibe los controles originales.
+  void Steer(uint8_t* ram, size_t size, float move_x, float move_y, float dt);
+  bool Steerable() const { return m_steerable; }
   void SetSpeed(float factor) { m_speed = factor; } // 1 = velocidad normal
   bool Active() const { return m_active; }
   // Devuelve la tabla y el suavizado del juego a su estado original (antes de guardar un estado, al
@@ -50,6 +57,8 @@ private:
 
   bool m_active = false;
   bool m_returning = false; // tras R3: girando hasta quedar detrás del personaje
+  bool m_steerable = false; // controles 360° aplicables en el frame siguiente
+  float m_steer_yaw = 0;    // giro actual del personaje con los controles 360° (radianes)
   float m_world_yaw = 0, m_pitch = 0;       // orientación elegida (radianes)
   float m_dist = 0, m_height = 0;           // distancia horizontal y altura respecto a la cabeza
   float m_game_dist = 0, m_game_height = 0; // las que quiere el juego (con colisión)

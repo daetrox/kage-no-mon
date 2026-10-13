@@ -148,7 +148,7 @@ void FreeCamera::Apply(uint8_t* ram, float yaw, float pitch)
   m_modified = true;
 }
 
-void FreeCamera::Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, bool reset, float dt)
+void FreeCamera::Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, bool reset, bool keep, float dt)
 {
   if (!ram || !Available() || m_table_end > size || m_target + 12 > size || m_mode + 2 > size ||
       m_smooth + 12 > size || m_smooth_target + 12 > size)
@@ -193,7 +193,7 @@ void FreeCamera::Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, 
   const bool follow = FollowMode(Get16(ram, m_mode)); // el juego usa una cámara que sigue al personaje
   if (!m_active)
   {
-    if ((sx == 0 && sy == 0) || !follow)
+    if ((sx == 0 && sy == 0 && !keep) || !follow)
       return;
     // Se empieza desde donde está ahora la cámara del juego: sin saltos.
     const float dx = static_cast<float>(cam[0] - target[0]), dz = static_cast<float>(cam[2] - target[2]);
@@ -300,4 +300,32 @@ void FreeCamera::Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, 
   std::memcpy(ram + m_cam, pos, sizeof(pos));
   std::memcpy(m_written, pos, sizeof(pos));
   m_have_written = true;
+}
+
+void FreeCamera::Steer(uint8_t* ram, size_t size, float move_x, float move_y, float dt)
+{
+  m_steerable = false;
+  if (!ram || !Available() || !m_active || m_returning || m_mode + 2 > size || !FollowMode(Get16(ram, m_mode)))
+    return;
+  const uint32_t obj = Get32(ram, m_player) & 0x1FFFFF;
+  const uint32_t rot = obj && obj + 0x34 <= size ? Get32(ram, obj + 0x30) & 0x1FFFFF : 0;
+  if (!rot || rot + 4 > size)
+    return;
+  m_steerable = true;
+  const float mag = std::sqrt(move_x * move_x + move_y * move_y);
+  const float current = (Get16(ram, rot + 2) & 0xFFF) * kTau / 4096.0f;
+  if (mag < 0.25f)
+  {
+    m_steer_yaw = current;
+    return;
+  }
+  // Hacia dentro de la pantalla el personaje mira en la misma dirección que la cámara (que queda en
+  // la dirección m_world_yaw desde su cabeza); la derecha de la pantalla resta.
+  const float desired = m_world_yaw - std::atan2(move_x, -move_y);
+  const float diff = std::remainder(desired - current, kTau);
+  // Giro rápido pero suave (como en los juegos actuales); los giros grandes se notan menos bruscos.
+  const float yaw = current + diff * (1.0f - std::exp(-16.0f * dt));
+  const int16_t value = static_cast<int16_t>(static_cast<int>(std::lround(yaw / kTau * 4096.0f)) & 0xFFF);
+  std::memcpy(ram + rot + 2, &value, 2);
+  m_steer_yaw = yaw;
 }

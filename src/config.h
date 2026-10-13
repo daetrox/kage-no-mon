@@ -35,7 +35,8 @@ struct Config
   std::string cheats;            // nombres de los trucos activos, separados por '|'
   bool game_prompts = true;
   bool free_camera = true;       // cámara libre con el joystick derecho (no en hardcore)
-  int camera_speed = 100;        // velocidad de la cámara libre, 20..300 %      // cambiar también los iconos de botones dentro del juego
+  int camera_speed = 100;
+  bool modern_controls = true;   // movimiento 360° relativo a la cámara (si no, el de tanque original)        // velocidad de la cámara libre, 20..300 %      // cambiar también los iconos de botones dentro del juego
   std::string prompt_style = "auto"; // iconos de botones: auto, keyboard, xbox, playstation
 
   void Load();

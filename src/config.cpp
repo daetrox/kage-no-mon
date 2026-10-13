@@ -253,6 +253,7 @@ void Config::Load()
     else if (key == "prompt_style") prompt_style = val;
     else if (key == "game_prompts") game_prompts = b;
     else if (key == "free_camera") free_camera = b;
+    else if (key == "modern_controls") modern_controls = b;
     else if (key == "camera_speed") camera_speed = std::clamp(std::atoi(val.c_str()), 20, 300);
     else if (key == "cheats") cheats = val;
     else if (key == "hardcore") hardcore = b;
@@ -299,6 +300,7 @@ void Config::Save() const
   out << "prompt_style=" << prompt_style << "\n";
   out << "game_prompts=" << game_prompts << "\n";
   out << "free_camera=" << free_camera << "\n";
+  out << "modern_controls=" << modern_controls << "\n";
   out << "camera_speed=" << camera_speed << "\n";
   out << "cheats=" << cheats << "\n";
   out << "hardcore=" << hardcore << "\n";
