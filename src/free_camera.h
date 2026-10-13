@@ -20,11 +20,13 @@ public:
   // reset = R3 recién pulsado.
   void Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, bool look, bool reset, float dt);
   void Reset() { m_active = false; }
+  void SetSpeed(float factor) { m_speed = factor; } // 1 = velocidad normal
   bool Active() const { return m_active; }
 
 private:
   uint32_t m_cam = 0, m_target = 0; // offsets en la RAM (vectores de 3 enteros de 32 bits)
   bool m_active = false;
   float m_yaw = 0, m_pitch = 0, m_dist = 0;
+  float m_speed = 1.0f;
   int32_t m_last_target[3] = {};
 };

@@ -95,9 +95,9 @@ void FreeCamera::Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, 
   if (look)
     return; // L1: el juego pone la cámara en los ojos del personaje
 
-  m_yaw += sx * kYawSpeed * dt;
+  m_yaw += sx * kYawSpeed * m_speed * dt;
   // Como en los juegos actuales: joystick abajo = la cámara sube y mira hacia abajo.
-  m_pitch = std::clamp(m_pitch + sy * kPitchSpeed * dt, kPitchMin, kPitchMax);
+  m_pitch = std::clamp(m_pitch + sy * kPitchSpeed * m_speed * dt, kPitchMin, kPitchMax);
 
   // En PS1 el eje Y apunta hacia abajo: la cámara sube restando.
   const float horiz = m_dist * std::cos(m_pitch);

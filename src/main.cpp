@@ -328,6 +328,7 @@ enum OptRow
   OPT_PROMPTS,
   OPT_GAME_PROMPTS,
   OPT_FREE_CAMERA,
+  OPT_CAMERA_SPEED,
   OPT_REMAP_KB,
   OPT_REMAP_PAD,
   OPT_RESET_CONTROLS,
@@ -357,7 +358,7 @@ const std::vector<int>& OptPageRows(int page)
     {OPT_RENDERER, OPT_SCALE, OPT_TEXFILTER, OPT_PGXP, OPT_WIDESCREEN, OPT_SIDEART, OPT_SMOOTH, OPT_FULLSCREEN,
      OPT_BACK},
     {OPT_VOLUME, OPT_MUSIC, OPT_SFX, OPT_BACK},
-    {OPT_PROMPTS, OPT_GAME_PROMPTS, OPT_FREE_CAMERA, OPT_REMAP_KB, OPT_REMAP_PAD, OPT_RESET_CONTROLS, OPT_CONTROLS, OPT_BACK},
+    {OPT_PROMPTS, OPT_GAME_PROMPTS, OPT_FREE_CAMERA, OPT_CAMERA_SPEED, OPT_REMAP_KB, OPT_REMAP_PAD, OPT_RESET_CONTROLS, OPT_CONTROLS, OPT_BACK},
     {OPT_BACK}, // TRUCOS tiene su propia pantalla
   };
   return pages[std::clamp(page, 0, kOptCategoryCount - 1)];
@@ -933,6 +934,7 @@ void App::StartGame(bool resume)
   m_emu.SetButtonPatches(GameButtonPatches());
   // Cámara libre: sólo fuera del modo hardcore (escribe en la RAM del juego).
   m_freecam.SetGame(m_cfg.free_camera && !m_hardcore_session ? Paths::ReadDiscSerial(m_cfg.game_path) : "");
+  m_freecam.SetSpeed(m_cfg.camera_speed / 100.0f);
   std::string error;
   if (!m_emu.Start(m_cfg, m_window, m_gl, &error))
   {
@@ -1266,6 +1268,10 @@ void App::OptionChange(int row, int dir)
       break;
     case OPT_GAME_PROMPTS: m_cfg.game_prompts = !m_cfg.game_prompts; break;
     case OPT_FREE_CAMERA: m_cfg.free_camera = !m_cfg.free_camera; break;
+    case OPT_CAMERA_SPEED:
+      m_cfg.camera_speed = activate ? (m_cfg.camera_speed >= 300 ? 20 : m_cfg.camera_speed + 10)
+                                    : std::clamp(m_cfg.camera_speed + dir * 10, 20, 300);
+      break;
     case OPT_PROMPTS:
     {
       static const char* styles[] = {"auto", "keyboard", "xbox", "playstation"};
@@ -2728,6 +2734,7 @@ void App::RenderOptions()
   {
     std::string label, value;
     bool enabled = true, arrows = false;
+    float bar = -1; // 0..1: la fila se dibuja como barra deslizante
   };
   auto info = [&](int id) -> Row {
     switch (id)
@@ -2781,6 +2788,13 @@ void App::RenderOptions()
                 !known ? "No disponible para este disco" : m_cfg.hardcore ? "No (modo hardcore)" : yesno(m_cfg.free_camera),
                 known && !m_cfg.hardcore, known && !m_cfg.hardcore};
       }
+      case OPT_CAMERA_SPEED:
+      {
+        FreeCamera probe;
+        const bool on = probe.SetGame(Paths::ReadDiscSerial(m_cfg.game_path)) && !m_cfg.hardcore && m_cfg.free_camera;
+        return {"Velocidad de la cámara", std::to_string(m_cfg.camera_speed) + "%", on, on,
+                (m_cfg.camera_speed - 20) / 280.0f};
+      }
       case OPT_GAME_PROMPTS:
       {
         return {"Iconos dentro del juego", m_cfg.game_prompts ? "Según el mando" : "Originales (PlayStation)", true,
@@ -2820,7 +2834,20 @@ void App::RenderOptions()
     if (has_value)
     {
       const Color vc = WithAlpha(lc, sel ? 1.0f : 0.88f);
-      if (r.arrows)
+      if (r.bar >= 0)
+      {
+        // Barra deslizante: flechas, pista con la parte llena y el valor a la derecha.
+        m_r.DrawIcon(Icon::ArrowLeft, IX(vx0), IY(y + 16), IS(22), WithAlpha(lc, sel ? 1.0f : 0.5f));
+        m_r.DrawIcon(Icon::ArrowRight, IX(vx1), IY(y + 16), IS(22), WithAlpha(lc, sel ? 1.0f : 0.5f));
+        const float bx0 = vx0 + 44, bx1 = vx1 - 96, by = y + 24, bh = 8;
+        const float fill = std::clamp(r.bar, 0.0f, 1.0f);
+        m_r.Rect(IX(bx0), IY(by), IS(bx1 - bx0), IS(bh), UiMode::Solid, {1, 1, 1, 0.12f * a});
+        m_r.Rect(IX(bx0), IY(by), IS((bx1 - bx0) * fill), IS(bh), UiMode::Solid,
+                 sel ? Color{1.0f, 0.82f, 0.45f, a} : WithAlpha(kGold, 0.75f * a));
+        m_r.Rect(IX(bx0 + (bx1 - bx0) * fill - 3), IY(by - 6), IS(6), IS(bh + 12), UiMode::Solid, WithAlpha(lc, a));
+        m_r.Text(m_r.ui, r.value, IX(vx1 - 22), IY(ty + 2), IS(27), vc, Align::Right);
+      }
+      else if (r.arrows)
       {
         m_r.DrawIcon(Icon::ArrowLeft, IX(vx0), IY(y + 16), IS(22), WithAlpha(lc, sel ? 1.0f : 0.5f));
         m_r.DrawIcon(Icon::ArrowRight, IX(vx1), IY(y + 16), IS(22), WithAlpha(lc, sel ? 1.0f : 0.5f));
@@ -2834,8 +2861,19 @@ void App::RenderOptions()
       }
     }
     const int index = static_cast<int>(i);
-    Hot(rr, 1, index, [this, index, id, vx0, vx1](float mx, float) {
+    const bool bar = r.bar >= 0 && r.enabled;
+    Hot(rr, 1, index, [this, index, id, vx0, vx1, bar](float mx, float) {
       m_opt_sel = index;
+      const float bx0 = IX(vx0 + 44), bx1 = IX(vx1 - 96);
+      if (bar && id == OPT_CAMERA_SPEED && mx >= bx0 - 8 && mx <= bx1 + 8)
+      {
+        // Clic en la barra: salta a ese valor (en pasos de 10).
+        const float f = std::clamp((mx - bx0) / (bx1 - bx0), 0.0f, 1.0f);
+        m_cfg.camera_speed = std::clamp(static_cast<int>(std::lround((20 + f * 280) / 10.0f)) * 10, 20, 300);
+        m_audio.Play(Sfx::Move);
+        m_cfg.Save();
+        return;
+      }
       if (mx > IX(vx0 - 15) && mx < IX(vx0 + 40))
         OptionChange(id, -1);
       else if (mx > IX(vx1 - 15))
@@ -2878,6 +2916,10 @@ void App::RenderOptions()
     case OPT_MUSIC: help = "Música del launcher (menús y pausa)."; break;
     case OPT_SFX: help = "Sonidos del launcher al moverte, elegir y cancelar."; break;
     case OPT_PROMPTS: help = "Iconos de botones del launcher. Automático cambia según uses teclado o mando."; break;
+    case OPT_CAMERA_SPEED:
+      help = "Lo rápido que gira la cámara libre con el joystick derecho. 100% es la velocidad normal; también "
+             "puedes hacer clic en la barra.";
+      break;
     case OPT_FREE_CAMERA:
       help = "Gira la cámara alrededor del personaje con el joystick derecho. R3 devuelve la cámara del juego; "
              "con L1 se mira en primera persona como siempre. Desactivada en modo hardcore.";

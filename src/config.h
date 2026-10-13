@@ -34,7 +34,8 @@ struct Config
   bool hardcore = false;         // modo hardcore: BIOS original, sin estados guardados ni trucos
   std::string cheats;            // nombres de los trucos activos, separados por '|'
   bool game_prompts = true;
-  bool free_camera = true;       // cámara libre con el joystick derecho (no en hardcore)      // cambiar también los iconos de botones dentro del juego
+  bool free_camera = true;       // cámara libre con el joystick derecho (no en hardcore)
+  int camera_speed = 100;        // velocidad de la cámara libre, 20..300 %      // cambiar también los iconos de botones dentro del juego
   std::string prompt_style = "auto"; // iconos de botones: auto, keyboard, xbox, playstation
 
   void Load();
