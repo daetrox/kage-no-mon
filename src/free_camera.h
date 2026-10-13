@@ -32,6 +32,8 @@ public:
   // recibe los controles originales.
   void Steer(uint8_t* ram, size_t size, float move_x, float move_y, float dt);
   bool Steerable() const { return m_steerable; }
+  // Con el arma desenvainada (según el último Steer): quieto, el personaje se pone en guardia.
+  bool Armed() const { return m_armed; }
   void SetSpeed(float factor) { m_speed = factor; } // 1 = velocidad normal
   bool Active() const { return m_active; }
   // Devuelve la tabla y el suavizado del juego a su estado original (antes de guardar un estado, al
@@ -58,10 +60,13 @@ private:
   bool m_active = false;
   bool m_returning = false; // tras R3: girando hasta quedar detrás del personaje
   bool m_steerable = false; // controles 360° aplicables en el frame siguiente
+  bool m_armed = false;     // el personaje tiene el arma desenvainada
   float m_steer_yaw = 0;    // giro actual del personaje con los controles 360° (radianes)
   float m_world_yaw = 0, m_pitch = 0;       // orientación elegida (radianes)
   float m_dist = 0, m_height = 0;           // distancia horizontal y altura respecto a la cabeza
   float m_game_dist = 0, m_game_height = 0; // las que quiere el juego (con colisión)
+  float m_ignore_game = 0;                  // segundos sin tener en cuenta esa distancia
+  int16_t m_last_mode = 0;
   float m_head = 0;                         // altura del punto de mira sobre la posición del personaje
   int32_t m_written[6] = {};                // última posición escrita (cámara y punto de mira)
   bool m_have_written = false;

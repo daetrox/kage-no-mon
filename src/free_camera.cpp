@@ -32,6 +32,8 @@ constexpr float kPitchSpeed = 1.2f; // rad/s
 constexpr float kPitchMin = -0.35f, kPitchMax = 0.9f;
 constexpr float kTargetJump = 2500.0f; // un salto así del objetivo = cinemática o cambio de escena
 constexpr float kTau = 6.28318530718f;
+// El juego coloca la tabla sobre la posición del personaje elevada 0x73A (0x80051FB4).
+constexpr float kBaseHeight = 0x73A;
 // Distancia ante un muro: se acerca deprisa y se aleja despacio (fracción por segundo, aprox.).
 constexpr float kPullIn = 14.0f, kPullOut = 2.5f, kHeightRate = 6.0f;
 
@@ -131,9 +133,17 @@ void FreeCamera::Apply(uint8_t* ram, float yaw, float pitch)
   {
     if (!IsPreset(&m_original[e]))
       continue;
-    // Sólo los vectores de la cámara (2 y 3; los del punto de mira, 0 y 1, no se giran), y siempre los
-    // del preajuste de reposo (entrada 0): al correr el juego usa una cámara a 1000 unidades que sólo
-    // queda lejos porque su suavizado va con retraso; sin ese retraso la distancia debe ser fija.
+    // Punto de mira (vectores 0 y 1): la cabeza del personaje, como el de la cámara libre. Así, en los
+    // modos que reescriben el suavizado congelado (la guardia), el juego no lo arrastra hacia delante.
+    for (int v = 0; v < 2; v++)
+    {
+      t[e + v * 4] = 0;
+      t[e + v * 4 + 1] = static_cast<int16_t>(std::lround(m_head + kBaseHeight));
+      t[e + v * 4 + 2] = 0;
+    }
+    // Cámara (vectores 2 y 3): siempre los del preajuste de reposo (entrada 0), girados. Al correr el
+    // juego usa una cámara a 1000 unidades que sólo queda lejos porque su suavizado va con retraso;
+    // sin ese retraso la distancia debe ser fija.
     for (int v = 2; v < 4; v++)
     {
       const float x = m_original[v * 4], y = m_original[v * 4 + 1], z = m_original[v * 4 + 2];
@@ -231,11 +241,24 @@ void FreeCamera::Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, 
   // los parámetros la diferencia entre la cámara (la que escribimos) y su posición deseada. Se pone a
   // cero tras leerla, así sólo cuenta cuando el juego ha vuelto a calcularla (lo hace un frame sí y
   // otro no).
+  // Al cambiar de modo de cámara (guardia → correr…) y al desenvainar o envainar (planos especiales
+  // del juego) la posición deseada da saltos que no son muros: durante un momento no se tiene en cuenta.
+  const int16_t mode = Get16(ram, m_mode);
+  const uint16_t action = obj + 0x7A <= size ? static_cast<uint16_t>(Get16(ram, obj + 0x78)) : 0;
+  if (mode != m_last_mode || (action & 0xFF00) == 0x700)
+    m_ignore_game = 0.3f;
+  m_last_mode = mode;
+  m_ignore_game = std::max(0.0f, m_ignore_game - dt);
   if (m_smooth_set && m_have_written)
   {
     int16_t delta[3];
     std::memcpy(delta, ram + m_smooth + 6, sizeof(delta));
-    if (delta[0] || delta[1] || delta[2])
+    if ((delta[0] || delta[1] || delta[2]) && m_ignore_game > 0)
+    {
+      const int16_t zero[3] = {};
+      std::memcpy(ram + m_smooth + 6, zero, sizeof(zero));
+    }
+    else if (delta[0] || delta[1] || delta[2])
     {
       const float gx = static_cast<float>(m_written[0] + delta[0] - m_written[3]),
                   gz = static_cast<float>(m_written[2] + delta[2] - m_written[5]);
@@ -312,6 +335,9 @@ void FreeCamera::Steer(uint8_t* ram, size_t size, float move_x, float move_y, fl
   if (!rot || rot + 4 > size)
     return;
   m_steerable = true;
+  // Acción del personaje (+0x78): el byte alto 0x01 = con el arma desenvainada (0x100 quieto,
+  // 0x103 corriendo…); 0x700/0x701 = desenvainando/envainando.
+  m_armed = obj + 0x7A <= size && (static_cast<uint16_t>(Get16(ram, obj + 0x78)) & 0xFF00) == 0x100;
   const float mag = std::sqrt(move_x * move_x + move_y * move_y);
   const float current = (Get16(ram, rot + 2) & 0xFFF) * kTau / 4096.0f;
   if (mag < 0.25f)

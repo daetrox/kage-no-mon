@@ -670,6 +670,7 @@ private:
   float m_test_rstick[2] = {}; // pruebas: joystick derecho simulado
   float m_test_lstick[2] = {}; // y el izquierdo
   float m_move[2] = {};        // dirección pedida para los controles 360° (relativa a la cámara)
+  float m_guard_wait = 0;      // segundos que la guardia automática espera tras un botón de acción
   float m_credits_scroll = 0, m_credits_target = 0;
   float m_credits_height = 0; // alto total del texto de créditos (px de la ilustración)
   int m_remap_device = 0;   // 0 teclado, 1 mando
@@ -1711,8 +1712,18 @@ EmuInput App::GatherGameInput()
                             (1u << RETRO_DEVICE_ID_JOYPAD_LEFT) | (1u << RETRO_DEVICE_ID_JOYPAD_RIGHT);
       in.buttons &= static_cast<uint16_t>(~dirs);
       in.analog[0][0] = in.analog[0][1] = 0;
+      // Botones de acción (ataque, salto, objetos, L/R): con ellos no se fuerza la guardia.
+      const uint16_t actions = (1u << RETRO_DEVICE_ID_JOYPAD_B) | (1u << RETRO_DEVICE_ID_JOYPAD_A) |
+                               (1u << RETRO_DEVICE_ID_JOYPAD_X) | (1u << RETRO_DEVICE_ID_JOYPAD_Y) |
+                               (1u << RETRO_DEVICE_ID_JOYPAD_L) | (1u << RETRO_DEVICE_ID_JOYPAD_R) |
+                               (1u << RETRO_DEVICE_ID_JOYPAD_L2) | (1u << RETRO_DEVICE_ID_JOYPAD_R2);
       if (mx * mx + my * my >= 0.25f * 0.25f)
         in.buttons |= static_cast<uint16_t>(1u << RETRO_DEVICE_ID_JOYPAD_UP);
+      else if (m_freecam.Armed() && !(in.buttons & actions) && m_guard_wait <= 0)
+        in.buttons |= static_cast<uint16_t>(1u << RETRO_DEVICE_ID_JOYPAD_DOWN); // quieto con el arma: guardia
+      // Tras un botón de acción la guardia espera un poco (envainar es ○ dos veces seguidas, combos…).
+      if (in.buttons & actions)
+        m_guard_wait = 0.6f;
     }
   }
   m_last_input = in;
@@ -2201,6 +2212,7 @@ void App::Update(float dt)
     m_mouse_idle += dt;
     if (m_mouse_idle > 2.0f && !m_paused)
       SDL_ShowCursor(SDL_DISABLE);
+    m_guard_wait = std::max(0.0f, m_guard_wait - dt);
     m_emu.Tick(GatherGameInput());
     for (uint32_t id : m_ach.TakeNewUnlocks())
     {
