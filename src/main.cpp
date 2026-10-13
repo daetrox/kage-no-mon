@@ -7,6 +7,7 @@
 #include "achievements.h"
 #include "audio.h"
 #include "cheats.h"
+#include "free_camera.h"
 #include "game_buttons.h"
 #include "config.h"
 #include "emulator.h"
@@ -326,6 +327,7 @@ enum OptRow
   OPT_SFX,
   OPT_PROMPTS,
   OPT_GAME_PROMPTS,
+  OPT_FREE_CAMERA,
   OPT_REMAP_KB,
   OPT_REMAP_PAD,
   OPT_RESET_CONTROLS,
@@ -355,7 +357,7 @@ const std::vector<int>& OptPageRows(int page)
     {OPT_RENDERER, OPT_SCALE, OPT_TEXFILTER, OPT_PGXP, OPT_WIDESCREEN, OPT_SIDEART, OPT_SMOOTH, OPT_FULLSCREEN,
      OPT_BACK},
     {OPT_VOLUME, OPT_MUSIC, OPT_SFX, OPT_BACK},
-    {OPT_PROMPTS, OPT_GAME_PROMPTS, OPT_REMAP_KB, OPT_REMAP_PAD, OPT_RESET_CONTROLS, OPT_CONTROLS, OPT_BACK},
+    {OPT_PROMPTS, OPT_GAME_PROMPTS, OPT_FREE_CAMERA, OPT_REMAP_KB, OPT_REMAP_PAD, OPT_RESET_CONTROLS, OPT_CONTROLS, OPT_BACK},
     {OPT_BACK}, // TRUCOS tiene su propia pantalla
   };
   return pages[std::clamp(page, 0, kOptCategoryCount - 1)];
@@ -648,7 +650,11 @@ private:
   float m_cheat_scroll = 0;
   bool m_cheats_active = false;    // la partida en curso usa trucos: logros en pausa
   bool m_hardcore_session = false;
-  bool m_test_saved = false; // la partida en curso es hardcore: sin estados guardados
+  bool m_test_saved = false;
+  FreeCamera m_freecam;
+  EmuInput m_last_input;       // lo último enviado al juego (para la cámara libre)
+  bool m_r3_was_down = false;
+  float m_test_rstick[2] = {}; // pruebas: joystick derecho simulado // la partida en curso es hardcore: sin estados guardados
   float m_credits_scroll = 0, m_credits_target = 0;
   float m_credits_height = 0; // alto total del texto de créditos (px de la ilustración)
   int m_remap_device = 0;   // 0 teclado, 1 mando
@@ -925,6 +931,8 @@ void App::StartGame(bool resume)
   m_cheats_active = !cheats.empty();
   m_emu.SetCheats(cheats);
   m_emu.SetButtonPatches(GameButtonPatches());
+  // Cámara libre: sólo fuera del modo hardcore (escribe en la RAM del juego).
+  m_freecam.SetGame(m_cfg.free_camera && !m_hardcore_session ? Paths::ReadDiscSerial(m_cfg.game_path) : "");
   std::string error;
   if (!m_emu.Start(m_cfg, m_window, m_gl, &error))
   {
@@ -950,6 +958,49 @@ void App::StartGame(bool resume)
   m_emu.on_frame = [this]() {
     size_t n = 0;
     const uint8_t* ram = m_emu.SystemRam(&n);
+    // Pruebas: TENSHU_TEST_POKE="13f1ce+=8,92580:32=41000" escribe (o suma) palabras de 16 bits
+    // (o de 32 con ":32") en la RAM tras cada frame.
+    if (const char* poke = std::getenv("TENSHU_TEST_POKE"); poke && ram)
+    {
+      std::stringstream ss(poke);
+      std::string item;
+      while (std::getline(ss, item, ','))
+      {
+        const size_t eq = item.find('=');
+        if (eq == std::string::npos)
+          continue;
+        const bool add = eq > 0 && item[eq - 1] == '+';
+        std::string a = item.substr(0, add ? eq - 1 : eq);
+        const bool wide = a.size() > 3 && a.compare(a.size() - 3, 3, ":32") == 0; // "92580:32=..."
+        if (wide)
+          a.resize(a.size() - 3);
+        const uint32_t addr = std::stoul(a, nullptr, 16) & (wide ? 0x1FFFFC : 0x1FFFFE);
+        const int v = std::stoi(item.substr(eq + 1));
+        if (addr + 4 > n)
+          continue;
+        uint8_t* p = const_cast<uint8_t*>(ram) + addr;
+        if (wide)
+        {
+          int32_t cur;
+          std::memcpy(&cur, p, 4);
+          cur = add ? cur + v : v;
+          std::memcpy(p, &cur, 4);
+        }
+        else
+        {
+          int16_t cur;
+          std::memcpy(&cur, p, 2);
+          cur = static_cast<int16_t>(add ? cur + v : v);
+          std::memcpy(p, &cur, 2);
+        }
+      }
+    }
+    // Cámara libre con el joystick derecho (L1 = vista en primera persona; R3 = cámara del juego).
+    const bool r3 = m_last_input.buttons & (1u << RETRO_DEVICE_ID_JOYPAD_R3);
+    m_freecam.Frame(const_cast<uint8_t*>(ram), n, m_last_input.analog[1][0] / 32767.0f,
+                    m_last_input.analog[1][1] / 32767.0f, m_last_input.buttons & (1u << RETRO_DEVICE_ID_JOYPAD_L),
+                    r3 && !m_r3_was_down, static_cast<float>(1.0 / m_emu.TargetFps()));
+    m_r3_was_down = r3;
     m_ach.DoFrame(ram, n);
   };
 
@@ -1214,6 +1265,7 @@ void App::OptionChange(int row, int dir)
                    "«Cargar BIOS nueva…» y elígela en la fila BIOS.");
       break;
     case OPT_GAME_PROMPTS: m_cfg.game_prompts = !m_cfg.game_prompts; break;
+    case OPT_FREE_CAMERA: m_cfg.free_camera = !m_cfg.free_camera; break;
     case OPT_PROMPTS:
     {
       static const char* styles[] = {"auto", "keyboard", "xbox", "playstation"};
@@ -1605,6 +1657,12 @@ EmuInput App::GatherGameInput()
     in.analog[1][0] = ax(SDL_CONTROLLER_AXIS_RIGHTX);
     in.analog[1][1] = ax(SDL_CONTROLLER_AXIS_RIGHTY);
   }
+  if (m_test_rstick[0] != 0 || m_test_rstick[1] != 0)
+  {
+    in.analog[1][0] = static_cast<int16_t>(m_test_rstick[0] * 32767);
+    in.analog[1][1] = static_cast<int16_t>(m_test_rstick[1] * 32767);
+  }
+  m_last_input = in;
   return in;
 }
 
@@ -2715,6 +2773,14 @@ void App::RenderOptions()
                                                                     : "Automático";
         return {"Iconos de botones", p, true, true};
       }
+      case OPT_FREE_CAMERA:
+      {
+        FreeCamera probe;
+        const bool known = probe.SetGame(Paths::ReadDiscSerial(m_cfg.game_path));
+        return {"Cámara libre (joystick derecho)",
+                !known ? "No disponible para este disco" : m_cfg.hardcore ? "No (modo hardcore)" : yesno(m_cfg.free_camera),
+                known && !m_cfg.hardcore, known && !m_cfg.hardcore};
+      }
       case OPT_GAME_PROMPTS:
       {
         return {"Iconos dentro del juego", m_cfg.game_prompts ? "Según el mando" : "Originales (PlayStation)", true,
@@ -2812,6 +2878,10 @@ void App::RenderOptions()
     case OPT_MUSIC: help = "Música del launcher (menús y pausa)."; break;
     case OPT_SFX: help = "Sonidos del launcher al moverte, elegir y cancelar."; break;
     case OPT_PROMPTS: help = "Iconos de botones del launcher. Automático cambia según uses teclado o mando."; break;
+    case OPT_FREE_CAMERA:
+      help = "Gira la cámara alrededor del personaje con el joystick derecho. R3 devuelve la cámara del juego; "
+             "con L1 se mira en primera persona como siempre. Desactivada en modo hardcore.";
+      break;
     case OPT_GAME_PROMPTS:
       help = "Los iconos de botones de los menús del juego se cambian por los de tu mando de Xbox o tu teclado, "
              "con tus asignaciones.";
@@ -3190,6 +3260,8 @@ void App::RenderControls()
            m_cfg.hardcore ? "F11 pantalla completa  ·  modo hardcore: sin F5 / F7"
                           : "F5 guardar · F7 cargar · F11 pantalla completa",
            IX(c0), IY(y + 14), IS(22), kDim);
+  if (m_cfg.free_camera && !m_cfg.hardcore)
+    m_r.Text(m_r.ui, "Joystick derecho: cámara libre  ·  R3: cámara del juego", IX(c0), IY(y + 44), IS(22), kDim);
   RenderHints({{PsButton::Back, "Volver"}}, IX(px + pw - 30), IY(py + ph - 64));
 }
 
@@ -3510,8 +3582,15 @@ int App::Run(int argc, char** argv)
       StartGame(screenshot_screen == "continue");
       if (m_modal == Modal::Dialog)
         SDL_Log("Error al arrancar: %s", m_dialog.c_str());
-      // TENSHU_TEST_SCRIPT="12:start,15:cross,..." pulsa botones en segundos concretos.
-      std::vector<std::pair<double, int>> script;
+      // TENSHU_TEST_SCRIPT="12:start,15:cross,20:left:2.5" pulsa botones en segundos concretos
+      // (el tercer campo, opcional, es cuánto tiempo se mantiene pulsado).
+      struct Press
+      {
+        double t;
+        int id;
+        double hold;
+      };
+      std::vector<Press> script;
       if (const char* sc = std::getenv("TENSHU_TEST_SCRIPT"))
       {
         std::stringstream ss(sc);
@@ -3519,7 +3598,13 @@ int App::Run(int argc, char** argv)
         while (std::getline(ss, item, ','))
         {
           const size_t c = item.find(':');
-          const std::string b = item.substr(c + 1);
+          std::string b = item.substr(c + 1);
+          double hold = 0.15;
+          if (const size_t c2 = b.find(':'); c2 != std::string::npos)
+          {
+            hold = std::atof(b.substr(c2 + 1).c_str());
+            b = b.substr(0, c2);
+          }
           int id = RETRO_DEVICE_ID_JOYPAD_START;
           if (b == "cross") id = RETRO_DEVICE_ID_JOYPAD_B;
           else if (b == "circle") id = RETRO_DEVICE_ID_JOYPAD_A;
@@ -3527,7 +3612,14 @@ int App::Run(int argc, char** argv)
           else if (b == "down") id = RETRO_DEVICE_ID_JOYPAD_DOWN;
           else if (b == "up") id = RETRO_DEVICE_ID_JOYPAD_UP;
           else if (b == "right") id = RETRO_DEVICE_ID_JOYPAD_RIGHT;
-          script.emplace_back(std::atof(item.substr(0, c).c_str()), id);
+          else if (b == "left") id = RETRO_DEVICE_ID_JOYPAD_LEFT;
+          else if (b == "square") id = RETRO_DEVICE_ID_JOYPAD_Y;
+          else if (b == "l1") id = RETRO_DEVICE_ID_JOYPAD_L;
+          else if (b == "r1") id = RETRO_DEVICE_ID_JOYPAD_R;
+          else if (b == "l2") id = RETRO_DEVICE_ID_JOYPAD_L2;
+          else if (b == "r2") id = RETRO_DEVICE_ID_JOYPAD_R2;
+          else if (b == "r3") id = RETRO_DEVICE_ID_JOYPAD_R3;
+          script.push_back({std::atof(item.substr(0, c).c_str()), id, hold});
         }
       }
       const double freq = static_cast<double>(SDL_GetPerformanceFrequency());
@@ -3545,13 +3637,29 @@ int App::Run(int argc, char** argv)
         if (const char* sv = std::getenv("TENSHU_TEST_SAVE_AT"))
           if (el >= std::atof(sv) && !m_test_saved)
             m_test_saved = m_emu.SaveState(StatePath());
+        // TENSHU_TEST_RSTICK="2:4:1:0,5:6:0:-1" mueve el joystick derecho (inicio:fin:x:y).
+        m_test_rstick[0] = m_test_rstick[1] = 0;
+        if (const char* rs = std::getenv("TENSHU_TEST_RSTICK"))
+        {
+          std::stringstream ss(rs);
+          std::string item;
+          while (std::getline(ss, item, ','))
+          {
+            float t0 = 0, t1 = 0, x = 0, y = 0;
+            if (std::sscanf(item.c_str(), "%f:%f:%f:%f", &t0, &t1, &x, &y) == 4 && el >= t0 && el < t1)
+            {
+              m_test_rstick[0] = x;
+              m_test_rstick[1] = y;
+            }
+          }
+        }
         // TENSHU_TEST_STYLE_AT="55:xbox" cambia el estilo de iconos en plena partida.
         if (const char* sa = std::getenv("TENSHU_TEST_STYLE_AT"))
           if (el >= std::atof(sa) && std::strchr(sa, ':'))
             m_cfg.prompt_style = std::strchr(sa, ':') + 1;
-        for (const auto& [t, id] : script)
-          if (el >= t && el < t + 0.15)
-            m_test_buttons |= static_cast<uint16_t>(1u << id);
+        for (const Press& p : script)
+          if (el >= p.t && el < p.t + p.hold)
+            m_test_buttons |= static_cast<uint16_t>(1u << p.id);
         Update(static_cast<float>((now - last) / freq));
         last = now;
         Render();

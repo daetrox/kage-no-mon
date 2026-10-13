@@ -51,6 +51,7 @@ ni mensajes extraños.
 | 🎮 **Teclado, Xbox o PlayStation** | Los iconos de los botones cambian solos según lo que uses. |
 | ⌨️ **Controles a tu gusto** | Reasigna cada botón del teclado y del mando por separado, con restauración por defecto. |
 | 🎮 **Iconos del juego según tu mando** | Los ✕ ○ □ △ y START de Tenchu 2 (menús, objetos y tutoriales) se convierten en A/B/X/Y o en tus teclas, con tus asignaciones, al instante. |
+| 🎥 **Cámara libre** | Gira la cámara alrededor del personaje con el joystick derecho; R3 devuelve la cámara del juego (no disponible en hardcore). |
 | 💀 **Modo hardcore** | Como en la consola: BIOS original, sin estados guardados ni trucos. Los logros conseguidos así se marcan como hardcore. |
 | 🥷 **Trucos** | Vida infinita, todas las misiones, objetos infinitos… Se activan en *Opciones › Trucos* (los logros se pausan mientras haya trucos). |
 | 🇪🇸 **Logros en español** | Las descripciones se traducen en tu equipo, con los nombres oficiales de las misiones. |
