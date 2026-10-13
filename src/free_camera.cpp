@@ -34,6 +34,9 @@ constexpr float kTargetJump = 2500.0f; // un salto así del objetivo = cinemáti
 constexpr float kTau = 6.28318530718f;
 // El juego coloca la tabla sobre la posición del personaje elevada 0x73A (0x80051FB4).
 constexpr float kBaseHeight = 0x73A;
+// Fotograma de la animación de la guardia (andar hacia atrás) que se usa como pose quieta: los dos
+// pies apoyados y separados.
+constexpr int16_t kGuardFrame = 4;
 // Distancia ante un muro: se acerca deprisa y se aleja despacio (fracción por segundo, aprox.).
 constexpr float kPullIn = 14.0f, kPullOut = 2.5f, kHeightRate = 6.0f;
 
@@ -353,6 +356,8 @@ void FreeCamera::Steer(uint8_t* ram, size_t size, float move_x, float move_y, bo
     {
       std::memcpy(ram + posp, &m_guard_pos[0], 4);
       std::memcpy(ram + posp + 8, &m_guard_pos[2], 4);
+      // Pose fija: el fotograma de la animación (+0x7A, ciclo de 16) no avanza.
+      std::memcpy(ram + obj + 0x7A, &kGuardFrame, 2);
     }
   }
   else
