@@ -13,6 +13,7 @@
 <p align="center">
   <a href="../../actions/workflows/appimage.yml"><img src="../../actions/workflows/appimage.yml/badge.svg" alt="Compilación"></a>
   <img src="https://img.shields.io/badge/Linux-x86__64-c0392b?logo=linux&logoColor=white" alt="Linux">
+  <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-c0392b?logo=windows&logoColor=white" alt="Windows 10/11">
   <img src="https://img.shields.io/badge/formato-AppImage-8e1b10?logo=appimage&logoColor=white" alt="AppImage">
   <img src="https://img.shields.io/badge/licencia-GPL--3.0-2c2c2c" alt="GPL-3.0">
   <img src="https://img.shields.io/badge/sin%20fines%20de%20lucro-%E2%9D%A4-a31515" alt="Sin fines de lucro">
@@ -94,10 +95,13 @@ ni mensajes extraños.
 ## 🚀 Empieza en 3 pasos
 
 ### 1️⃣ Descarga el launcher
-Entra en **[Releases](../../releases/latest)** y descarga el archivo `KageNoMon-…-x86_64.AppImage`.
+Entra en **[Releases](../../releases/latest)** y descarga:
+
+- 🐧 **Linux:** `KageNoMon-…-x86_64.AppImage`
+- 🪟 **Windows 10/11:** `KageNoMon-…-windows-x64.zip` (descomprímelo donde quieras)
 
 <sub>¿Todavía no hay ninguna versión publicada? En la pestaña **[Actions](../../actions)** abre la
-última compilación correcta ✅ y descarga el AppImage desde *Artifacts* (requiere iniciar sesión en GitHub).</sub>
+última compilación correcta ✅ y descarga el paquete desde *Artifacts* (requiere iniciar sesión en GitHub).</sub>
 
 ### 2️⃣ Prepara una carpeta
 Crea una carpeta donde quieras y deja dentro el AppImage y tu disco así:
@@ -112,13 +116,18 @@ Crea una carpeta donde quieras y deja dentro el AppImage y tu disco así:
     └── scph5502.bin
 ```
 
+<sub>En Windows la carpeta ya viene así dentro del `.zip`, con `KageNoMon.exe` en lugar del AppImage.</sub>
+
 ### 3️⃣ ¡A jugar!
-Haz doble clic en el AppImage. Si no se abre, dale permiso de ejecución primero:
+**Linux:** haz doble clic en el AppImage. Si no se abre, dale permiso de ejecución primero:
 
 ```sh
 chmod +x KageNoMon-*.AppImage
 ./KageNoMon-*.AppImage
 ```
+
+**Windows:** abre `KageNoMon.exe`. Si aparece «Windows protegió su PC», pulsa **Más información ›
+Ejecutar de todas formas** (el programa no está firmado digitalmente).
 
 > [!TIP]
 > También puedes **arrastrar** la imagen del disco o la BIOS sobre la ventana del launcher,
@@ -210,10 +219,11 @@ Requisitos: `git`, `cmake`, `ninja`, `g++` y las cabeceras de SDL2 para X11/Wayl
 ```sh
 ./build.sh                       # compila SDL2, el núcleo SwanStation y el launcher → build/dist/
 packaging/make_appimage.sh dev   # empaqueta build/dist como AppImage
+./build-windows.sh --package     # versión de Windows (compilación cruzada con llvm-mingw) → .zip
 ```
 
-GitHub Actions (`.github/workflows/appimage.yml`) compila el AppImage en cada cambio y lo publica
-como Release al crear una etiqueta `vX.Y`.
+GitHub Actions (`.github/workflows/appimage.yml`) compila el AppImage y el `.zip` de Windows en cada
+cambio y los publica como Release al crear una etiqueta `vX.Y.Z`.
 
 | Carpeta | Contenido |
 |---|---|
