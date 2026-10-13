@@ -1,0 +1,23 @@
+# Compilación cruzada para Windows (x86_64) con MinGW-w64.
+# MINGW_PREFIX: carpeta del compilador (llvm-mingw en local, o vacío si está en el PATH, como el
+# paquete mingw-w64 de Ubuntu en la CI). MINGW_CC/MINGW_CXX permiten elegir gcc o clang.
+set(CMAKE_SYSTEM_NAME Windows)
+set(CMAKE_SYSTEM_PROCESSOR x86_64)
+set(_triple x86_64-w64-mingw32)
+if(DEFINED ENV{MINGW_PREFIX} AND NOT "$ENV{MINGW_PREFIX}" STREQUAL "")
+  set(_bin "$ENV{MINGW_PREFIX}/bin/")
+else()
+  set(_bin "")
+endif()
+if(DEFINED ENV{MINGW_CC})
+  set(CMAKE_C_COMPILER "${_bin}$ENV{MINGW_CC}")
+  set(CMAKE_CXX_COMPILER "${_bin}$ENV{MINGW_CXX}")
+else()
+  set(CMAKE_C_COMPILER "${_bin}${_triple}-clang")
+  set(CMAKE_CXX_COMPILER "${_bin}${_triple}-clang++")
+endif()
+set(CMAKE_RC_COMPILER "${_bin}${_triple}-windres")
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)

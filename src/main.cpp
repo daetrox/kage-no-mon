@@ -9,6 +9,7 @@
 #include "cheats.h"
 #include "free_camera.h"
 #include "game_buttons.h"
+#include "platform.h"
 #include "config.h"
 #include "emulator.h"
 #include "gl.h"
@@ -26,7 +27,7 @@ extern "C" {
 #include <cstdio>
 #include <cstring>
 #include <ctime>
-#include <dirent.h>
+#include <filesystem>
 #include <functional>
 #include <map>
 #include <mutex>
@@ -73,7 +74,7 @@ constexpr float kOutroLen = 1.25f;
 
 std::string BaseName(const std::string& path)
 {
-  const size_t s = path.find_last_of('/');
+  const size_t s = path.find_last_of("/\\");
   return s == std::string::npos ? path : path.substr(s + 1);
 }
 
@@ -123,27 +124,24 @@ std::string AutoDetectGame()
   for (int i = 0; i < 4; i++)
   {
     dirs.push_back(d);
-    const size_t s = d.find_last_of('/');
+    const size_t s = d.find_last_of("/\\");
     if (s == std::string::npos || s == 0)
       break;
     d = d.substr(0, s);
   }
   for (const std::string& dir : dirs)
   {
-    DIR* dp = opendir(dir.c_str());
-    if (!dp)
-      continue;
     std::string best;
-    while (dirent* e = readdir(dp))
+    std::error_code ec;
+    for (const std::filesystem::directory_entry& e : std::filesystem::directory_iterator(std::filesystem::u8path(dir), ec))
     {
-      const std::string name = e->d_name;
+      const std::string name = e.path().filename().u8string();
       if (!IsDiscImage(name))
         continue;
       const bool pref = HasExt(name, ".cue") || HasExt(name, ".chd");
       if (best.empty() || pref)
         best = dir + "/" + name;
     }
-    closedir(dp);
     if (!best.empty())
       return best;
   }
@@ -160,14 +158,19 @@ std::vector<std::string> SplitLines(const std::string& s)
   return out;
 }
 
-// --- Selector de archivos nativo (zenity / kdialog) en un hilo aparte ---
+// --- Selector de archivos nativo (Windows: diálogo del sistema; Linux: zenity / kdialog), en un
+// hilo aparte ---
 class FilePicker
 {
 public:
   static bool Available()
   {
+#ifdef _WIN32
+    return true;
+#else
     return std::system("command -v zenity >/dev/null 2>&1") == 0 ||
            std::system("command -v kdialog >/dev/null 2>&1") == 0;
+#endif
   }
 
   void Open(const std::string& title, const std::string& patterns, std::function<void(const std::string&)> cb)
@@ -178,6 +181,9 @@ public:
     m_done = false;
     m_callback = std::move(cb);
     std::thread([this, title, patterns]() {
+#ifdef _WIN32
+      const std::string result = Platform::OpenFileDialog(title, patterns);
+#else
       std::string cmd;
       if (std::system("command -v zenity >/dev/null 2>&1") == 0)
         cmd = "zenity --file-selection --title=\"" + title + "\" --file-filter=\"" + title + " | " + patterns +
@@ -194,6 +200,7 @@ public:
       }
       while (!result.empty() && (result.back() == '\n' || result.back() == '\r'))
         result.pop_back();
+#endif
       std::lock_guard<std::mutex> lock(m_mutex);
       m_result = result;
       m_done = true;

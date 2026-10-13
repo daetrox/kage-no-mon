@@ -65,10 +65,10 @@ index 3e2732a..2de573d 100644
    }
 diff --git a/src/core/kage_vram.cpp b/src/core/kage_vram.cpp
 new file mode 100644
-index 0000000..3c25fa8
+index 0000000..25c22d4
 --- /dev/null
 +++ b/src/core/kage_vram.cpp
-@@ -0,0 +1,380 @@
+@@ -0,0 +1,387 @@
 +// Kage no Mon: parches de píxeles sobre subidas concretas a la VRAM.
 +//
 +// El launcher envía los parches ya generados (kage_vram_set_patches). Un parche identifica una
@@ -91,6 +91,13 @@ index 0000000..3c25fa8
 +#include <map>
 +#include <string>
 +#include <vector>
++
++// Funciones que el launcher busca en el núcleo (dlsym / GetProcAddress).
++#ifdef _WIN32
++#define KAGE_EXPORT __declspec(dllexport)
++#else
++#define KAGE_EXPORT __attribute__((visibility("default")))
++#endif
 +
 +namespace {
 +
@@ -370,7 +377,7 @@ index 0000000..3c25fa8
 +
 +// Vigila una subida (hash XXH3-128) que el juego coloca siempre en (x, y) de la VRAM.
 +// `fixed`: el juego no usa nunca ese sitio para otra cosa.
-+__attribute__((visibility("default"))) void kage_vram_watch(uint64_t hash_low, uint64_t hash_high, uint32_t x,
++KAGE_EXPORT void kage_vram_watch(uint64_t hash_low, uint64_t hash_high, uint32_t x,
 +                                                             uint32_t y, bool fixed)
 +{
 +  Watch& wa = s_watch[{hash_low, hash_high}];
@@ -381,7 +388,7 @@ index 0000000..3c25fa8
 +
 +// Contenido original de una subida vigilada, guardado por el launcher en una sesión anterior (sale
 +// del disco del propio usuario). Sólo se acepta si su hash coincide.
-+__attribute__((visibility("default"))) bool kage_vram_set_original(uint64_t hash_low, uint64_t hash_high,
++KAGE_EXPORT bool kage_vram_set_original(uint64_t hash_low, uint64_t hash_high,
 +                                                                   uint32_t w, uint32_t h, const uint16_t* data)
 +{
 +  const auto it = s_watch.find({hash_low, hash_high});
@@ -395,7 +402,7 @@ index 0000000..3c25fa8
 +
 +// Copia el original de una subida vigilada, si ya se conoce. Devuelve su número de palabras (0 si
 +// no se conoce); con `out` nulo o pequeño sólo informa del tamaño.
-+__attribute__((visibility("default"))) size_t kage_vram_get_original(uint64_t hash_low, uint64_t hash_high,
++KAGE_EXPORT size_t kage_vram_get_original(uint64_t hash_low, uint64_t hash_high,
 +                                                                     uint32_t* w, uint32_t* h, uint16_t* out,
 +                                                                     size_t max_words)
 +{
@@ -412,7 +419,7 @@ index 0000000..3c25fa8
 +
 +// Sustituye los parches activos (registros seguidos; size 0 = texturas originales). Lo que ya esté
 +// en la VRAM se cambia en el siguiente frame.
-+__attribute__((visibility("default"))) bool kage_vram_set_patches(const void* data, size_t size)
++KAGE_EXPORT bool kage_vram_set_patches(const void* data, size_t size)
 +{
 +  std::map<Key, Patch> patches;
 +  if (size && !ParsePatches(static_cast<const uint8_t*>(data), size, &patches))
@@ -423,7 +430,7 @@ index 0000000..3c25fa8
 +}
 +
 +// La VRAM ha cambiado por completo (estado cargado): se reescriben las zonas vigiladas.
-+__attribute__((visibility("default"))) void kage_vram_refresh()
++KAGE_EXPORT void kage_vram_refresh()
 +{
 +  for (auto& [k, wa] : s_watch)
 +    wa.resident = Watch::Resident::Unknown;
@@ -431,13 +438,13 @@ index 0000000..3c25fa8
 +}
 +
 +// Diagnóstico: registra cada subida (hash, x, y, ancho, alto) en un archivo de texto.
-+__attribute__((visibility("default"))) void kage_vram_log(const char* path)
++KAGE_EXPORT void kage_vram_log(const char* path)
 +{
 +  s_log_path = path ? path : "";
 +}
 +
 +// Diagnóstico: copia de la VRAM (1024x512, 16 bits) con lo subido por la CPU (requiere kage_vram_log).
-+__attribute__((visibility("default"))) bool kage_vram_dump(const char* path)
++KAGE_EXPORT bool kage_vram_dump(const char* path)
 +{
 +  if (s_shadow.empty())
 +    return false;

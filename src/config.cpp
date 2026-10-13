@@ -4,39 +4,68 @@
 #include <SDL_scancode.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
-#include <dirent.h>
-#include <strings.h>
+#include <filesystem>
 #include <fstream>
-#include <sys/stat.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <unistd.h>
+#endif
+
+namespace fs = std::filesystem;
 
 namespace Paths {
+
+#ifdef _WIN32
+// Las rutas se manejan en UTF-8 y con '/' en los dos sistemas (Windows también las acepta; el
+// ejecutable declara UTF-8 como página de códigos en su manifiesto).
+static std::string Slashes(std::string p)
+{
+  std::replace(p.begin(), p.end(), '\\', '/');
+  return p;
+}
+#endif
 
 std::string ExeDir()
 {
   static std::string dir;
   if (dir.empty())
   {
+#ifdef _WIN32
+    wchar_t buf[MAX_PATH * 4];
+    const DWORD len = GetModuleFileNameW(nullptr, buf, static_cast<DWORD>(std::size(buf)));
+    const std::string path = len ? Slashes(fs::path(std::wstring(buf, len)).u8string()) : std::string();
+#else
     char buf[4096];
     const ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
-    if (len > 0)
-    {
-      buf[len] = '\0';
-      dir = buf;
-      dir = dir.substr(0, dir.find_last_of('/'));
-    }
-    else
-    {
-      dir = ".";
-    }
+    const std::string path = len > 0 ? std::string(buf, static_cast<size_t>(len)) : std::string();
+#endif
+    const size_t slash = path.find_last_of('/');
+    dir = slash == std::string::npos ? "." : path.substr(0, slash);
   }
   return dir;
 }
 
 std::string AssetsDir() { return ExeDir() + "/assets"; }
+#ifdef _WIN32
+std::string CorePath() { return ExeDir() + "/core/swanstation_libretro.dll"; }
+#else
 std::string CorePath() { return ExeDir() + "/core/swanstation_libretro.so"; }
+#endif
 
+#ifdef _WIN32
+// %APPDATA% (configuración) y %LOCALAPPDATA% (partidas, logros…).
+static std::string KnownDir(const wchar_t* var)
+{
+  const wchar_t* v = _wgetenv(var);
+  return v && *v ? Slashes(fs::path(v).u8string()) : ExeDir();
+}
+
+std::string ConfigDir() { return KnownDir(L"APPDATA") + "/tenshu2"; }
+std::string DataDir() { return KnownDir(L"LOCALAPPDATA") + "/tenshu2"; }
+#else
 static std::string Home()
 {
   const char* home = std::getenv("HOME");
@@ -54,6 +83,7 @@ std::string DataDir()
   const char* xdg = std::getenv("XDG_DATA_HOME");
   return (xdg && *xdg ? std::string(xdg) : Home() + "/.local/share") + "/tenshu2";
 }
+#endif
 
 std::string SavesDir() { return DataDir() + "/memcards"; }
 std::string StatesDir() { return DataDir() + "/states"; }
@@ -77,27 +107,26 @@ std::string GameDir() { return UserDir() + "/game"; }
 std::vector<std::string> FindBiosFiles()
 {
   std::vector<std::string> out;
-  if (DIR* dp = opendir(BiosDir().c_str()))
+  std::error_code ec;
+  for (const fs::directory_entry& e : fs::directory_iterator(fs::u8path(BiosDir()), ec))
   {
-    while (dirent* e = readdir(dp))
-    {
-      struct stat st;
-      const std::string full = BiosDir() + "/" + e->d_name;
-      if (stat(full.c_str(), &st) == 0 && S_ISREG(st.st_mode) && st.st_size == 512 * 1024)
-        out.push_back(e->d_name);
-    }
-    closedir(dp);
+    std::error_code ec2;
+    if (e.is_regular_file(ec2) && e.file_size(ec2) == 512 * 1024)
+      out.push_back(e.path().filename().u8string());
   }
-  std::sort(out.begin(), out.end(), [](const std::string& a, const std::string& b) {
-    return strcasecmp(a.c_str(), b.c_str()) < 0;
-  });
+  auto lower = [](std::string v) {
+    for (char& c : v)
+      c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return v;
+  };
+  std::sort(out.begin(), out.end(), [&](const std::string& a, const std::string& b) { return lower(a) < lower(b); });
   return out;
 }
 
 bool FileExists(const std::string& path)
 {
-  struct stat st;
-  return !path.empty() && stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode);
+  std::error_code ec;
+  return !path.empty() && fs::is_regular_file(fs::u8path(path), ec);
 }
 
 std::string ReadDiscSerial(const std::string& image_path)
@@ -121,7 +150,7 @@ std::string ReadDiscSerial(const std::string& image_path)
       if (line.find("FILE") != std::string::npos && a != std::string::npos && b > a)
       {
         const std::string name = line.substr(a + 1, b - a - 1);
-        const size_t slash = image_path.find_last_of('/');
+        const size_t slash = image_path.find_last_of("/\\");
         bin = (slash == std::string::npos ? std::string() : image_path.substr(0, slash + 1)) + name;
         break;
       }
@@ -174,11 +203,8 @@ bool CopyFile(const std::string& from, const std::string& to)
 
 void MakeDirs(const std::string& path)
 {
-  for (size_t pos = 1; pos != std::string::npos;)
-  {
-    pos = path.find('/', pos + 1);
-    mkdir(path.substr(0, pos).c_str(), 0755);
-  }
+  std::error_code ec;
+  fs::create_directories(fs::u8path(path), ec);
 }
 
 } // namespace Paths

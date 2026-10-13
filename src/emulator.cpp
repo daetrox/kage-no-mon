@@ -1,12 +1,12 @@
 #include "emulator.h"
 #include "libretro.h"
 #include "game_buttons.h"
+#include "platform.h"
 
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <dlfcn.h>
 #include <fstream>
 #include <map>
 #include <sstream>
@@ -343,15 +343,15 @@ bool Emulator::LoadCore(std::string* error)
     return true;
 
   const std::string path = Paths::CorePath();
-  m_lib = dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL);
+  m_lib = Platform::OpenLibrary(path);
   if (!m_lib)
   {
-    *error = "No se pudo cargar el núcleo de emulación:\n" + std::string(dlerror());
+    *error = "No se pudo cargar el núcleo de emulación:\n" + Platform::LastLibraryError();
     return false;
   }
 
 #define LOAD_SYM(name)                                                                             \
-  g_core.name = reinterpret_cast<decltype(g_core.name)>(dlsym(m_lib, #name));                     \
+  g_core.name = reinterpret_cast<decltype(g_core.name)>(Platform::LibrarySymbol(m_lib, #name));                     \
   if (!g_core.name)                                                                                \
   {                                                                                                \
     *error = "El núcleo no exporta " #name;                                                        \
@@ -378,13 +378,13 @@ bool Emulator::LoadCore(std::string* error)
   LOAD_SYM(retro_get_memory_data)
   LOAD_SYM(retro_get_memory_size)
 #undef LOAD_SYM
-  m_kage_watch = reinterpret_cast<decltype(m_kage_watch)>(dlsym(m_lib, "kage_vram_watch"));
-  m_kage_set_patches = reinterpret_cast<decltype(m_kage_set_patches)>(dlsym(m_lib, "kage_vram_set_patches"));
-  m_kage_log = reinterpret_cast<decltype(m_kage_log)>(dlsym(m_lib, "kage_vram_log"));
-  m_kage_dump = reinterpret_cast<decltype(m_kage_dump)>(dlsym(m_lib, "kage_vram_dump"));
-  m_kage_refresh = reinterpret_cast<decltype(m_kage_refresh)>(dlsym(m_lib, "kage_vram_refresh"));
-  m_kage_set_original = reinterpret_cast<decltype(m_kage_set_original)>(dlsym(m_lib, "kage_vram_set_original"));
-  m_kage_get_original = reinterpret_cast<decltype(m_kage_get_original)>(dlsym(m_lib, "kage_vram_get_original"));
+  m_kage_watch = reinterpret_cast<decltype(m_kage_watch)>(Platform::LibrarySymbol(m_lib, "kage_vram_watch"));
+  m_kage_set_patches = reinterpret_cast<decltype(m_kage_set_patches)>(Platform::LibrarySymbol(m_lib, "kage_vram_set_patches"));
+  m_kage_log = reinterpret_cast<decltype(m_kage_log)>(Platform::LibrarySymbol(m_lib, "kage_vram_log"));
+  m_kage_dump = reinterpret_cast<decltype(m_kage_dump)>(Platform::LibrarySymbol(m_lib, "kage_vram_dump"));
+  m_kage_refresh = reinterpret_cast<decltype(m_kage_refresh)>(Platform::LibrarySymbol(m_lib, "kage_vram_refresh"));
+  m_kage_set_original = reinterpret_cast<decltype(m_kage_set_original)>(Platform::LibrarySymbol(m_lib, "kage_vram_set_original"));
+  m_kage_get_original = reinterpret_cast<decltype(m_kage_get_original)>(Platform::LibrarySymbol(m_lib, "kage_vram_get_original"));
   return true;
 }
 

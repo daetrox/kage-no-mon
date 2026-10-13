@@ -1,4 +1,5 @@
 #include "achievements.h"
+#include "platform.h"
 #include "config.h"
 #include "json.h"
 #include "translate.h"
@@ -10,7 +11,6 @@
 #include <ctime>
 #include <fstream>
 #include <sstream>
-#include <sys/stat.h>
 #include <thread>
 
 extern "C" {
@@ -56,8 +56,10 @@ std::string UrlEncode(const std::string& s)
 bool CurlFetch(const std::string& url, const std::string& post_data, const std::string& out_path)
 {
   std::string tmp = out_path + ".part";
-  const std::string cmd = "curl -sSfL --max-time 60 -K - -o '" + tmp + "' 2>/dev/null";
-  FILE* p = popen(cmd.c_str(), "w");
+  // En Windows 10/11 curl.exe viene con el sistema.
+  const std::string cmd =
+    "curl -sSfL --max-time 60 -K - -o " + Platform::QuoteArg(tmp) + " " + Platform::NullRedirect();
+  FILE* p = Platform::OpenPipe(cmd, "w");
   if (!p)
     return false;
   auto esc = [](const std::string& v) {
@@ -74,12 +76,13 @@ bool CurlFetch(const std::string& url, const std::string& post_data, const std::
   std::fprintf(p, "user-agent = \"%s\"\n", kUserAgent);
   if (!post_data.empty())
     std::fprintf(p, "data = \"%s\"\n", esc(post_data).c_str());
-  const int status = pclose(p);
+  const int status = Platform::ClosePipe(p);
   if (status != 0)
   {
     std::remove(tmp.c_str());
     return false;
   }
+  std::remove(out_path.c_str()); // en Windows rename no sustituye un archivo existente
   return std::rename(tmp.c_str(), out_path.c_str()) == 0;
 }
 
