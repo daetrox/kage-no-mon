@@ -320,8 +320,8 @@ void FreeCamera::Steer(uint8_t* ram, size_t size, float move_x, float move_y, fl
     return;
   }
   // Hacia dentro de la pantalla el personaje mira en la misma dirección que la cámara (que queda en
-  // la dirección m_world_yaw desde su cabeza); la derecha de la pantalla resta.
-  const float desired = m_world_yaw - std::atan2(move_x, -move_y);
+  // la dirección m_world_yaw desde su cabeza); la derecha de la pantalla suma.
+  const float desired = m_world_yaw + std::atan2(move_x, -move_y);
   const float diff = std::remainder(desired - current, kTau);
   // Giro rápido pero suave (como en los juegos actuales); los giros grandes se notan menos bruscos.
   const float yaw = current + diff * (1.0f - std::exp(-16.0f * dt));
