@@ -548,6 +548,14 @@ private:
     return Paths::StatesDir() + "/" + StemName(m_cfg.game_path) + ".state";
   }
   bool HasResumeState() const { return Paths::FileExists(StatePath()); }
+  // Guarda el estado con la tabla de cámara original (ver FreeCamera::Restore).
+  bool SaveStateNow()
+  {
+    size_t n = 0;
+    if (const uint8_t* ram = m_emu.SystemRam(&n))
+      m_freecam.Restore(const_cast<uint8_t*>(ram));
+    return m_emu.SaveState(StatePath());
+  }
   bool HasSonyBios() const
   {
     return !m_cfg.bios_file.empty() && Paths::FileExists(Paths::BiosDir() + "/" + m_cfg.bios_file);
@@ -997,11 +1005,11 @@ void App::StartGame(bool resume)
         }
       }
     }
-    // Cámara libre con el joystick derecho (L1 = vista en primera persona; R3 = cámara del juego).
+    // Cámara libre con el joystick derecho (R3 = cámara del juego).
     const bool r3 = m_last_input.buttons & (1u << RETRO_DEVICE_ID_JOYPAD_R3);
     m_freecam.Frame(const_cast<uint8_t*>(ram), n, m_last_input.analog[1][0] / 32767.0f,
-                    m_last_input.analog[1][1] / 32767.0f, m_last_input.buttons & (1u << RETRO_DEVICE_ID_JOYPAD_L),
-                    r3 && !m_r3_was_down, static_cast<float>(1.0 / m_emu.TargetFps()));
+                    m_last_input.analog[1][1] / 32767.0f, r3 && !m_r3_was_down,
+                    static_cast<float>(1.0 / m_emu.TargetFps()));
     m_r3_was_down = r3;
     m_ach.DoFrame(ram, n);
   };
@@ -1017,7 +1025,7 @@ void App::StopGame(bool autosave)
   if (!m_emu.IsRunning())
     return;
   if (autosave && !m_hardcore_session)
-    m_emu.SaveState(StatePath());
+    SaveStateNow();
   m_emu.on_frame = nullptr;
   m_ach.EndSession();
   m_emu.Stop();
@@ -1038,7 +1046,7 @@ void App::ActivatePause(int index)
     case 1:
       if (StatesBlocked())
         break;
-      Toast(m_emu.SaveState(StatePath()) ? "Partida guardada" : "No se pudo guardar la partida");
+      Toast(SaveStateNow() ? "Partida guardada" : "No se pudo guardar la partida");
       resume();
       break;
     case 2:
@@ -1855,7 +1863,7 @@ void App::HandleEvent(const SDL_Event& e)
         {
         }
         else if (key == SDLK_F5)
-          Toast(m_emu.SaveState(StatePath()) ? "Partida guardada" : "No se pudo guardar");
+          Toast(SaveStateNow() ? "Partida guardada" : "No se pudo guardar");
         else if (key == SDLK_F7)
         {
           if (m_emu.LoadState(StatePath()))
@@ -2921,8 +2929,8 @@ void App::RenderOptions()
              "puedes hacer clic en la barra.";
       break;
     case OPT_FREE_CAMERA:
-      help = "Gira la cámara alrededor del personaje con el joystick derecho. R3 devuelve la cámara del juego; "
-             "con L1 se mira en primera persona como siempre. Desactivada en modo hardcore.";
+      help = "Gira la cámara alrededor del personaje con el joystick derecho, respetando los muros como la cámara "
+             "del juego. R3 la devuelve detrás. Al apuntar o mirar con L1 manda el juego. No en hardcore.";
       break;
     case OPT_GAME_PROMPTS:
       help = "Los iconos de botones de los menús del juego se cambian por los de tu mando de Xbox o tu teclado, "
@@ -3678,7 +3686,7 @@ int App::Run(int argc, char** argv)
         // TENSHU_TEST_SAVE_AT="50" guarda un estado (en TENSHU_TEST_STATE) en ese segundo.
         if (const char* sv = std::getenv("TENSHU_TEST_SAVE_AT"))
           if (el >= std::atof(sv) && !m_test_saved)
-            m_test_saved = m_emu.SaveState(StatePath());
+            m_test_saved = SaveStateNow();
         // TENSHU_TEST_RSTICK="2:4:1:0,5:6:0:-1" mueve el joystick derecho (inicio:fin:x:y).
         m_test_rstick[0] = m_test_rstick[1] = 0;
         if (const char* rs = std::getenv("TENSHU_TEST_RSTICK"))
