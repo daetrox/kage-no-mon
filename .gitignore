@@ -3,3 +3,4 @@ third_party/
 *.tar.gz
 *.AppImage
 build-win/
+KageNoMon-*.zip
