@@ -52,6 +52,7 @@ ni mensajes extraños.
 | 🎮 **Teclado, Xbox o PlayStation** | Los iconos de los botones cambian solos según lo que uses. |
 | ⌨️ **Controles a tu gusto** | Reasigna cada botón del teclado y del mando por separado, con restauración por defecto. |
 | 🎮 **Iconos del juego según tu mando** | Los ✕ ○ □ △ y START de Tenchu 2 (menús, objetos y tutoriales) se convierten en A/B/X/Y o en tus teclas, con tus asignaciones, al instante. |
+| ⌨️🖱️ **Teclado y ratón** | Esquema opcional: WASD para moverte, el ratón mueve la cámara, clic izquierdo ataca, clic derecho usa la herramienta y la rueda la cambia; Espacio salta y Ctrl agacha. |
 | 🎯 **Fijar enemigo (L3)** | Fija al enemigo a la vista más cercano (nunca a través de paredes), lo señala con una marca roja sobre su cabeza y la cámara lo encuadra tras de ti; el joystick derecho a un lado cambia de objetivo. |
 | 🕹️ **Movimiento 360°** | El personaje corre hacia donde empujas el joystick, relativo a la cámara, en lugar de los controles de tanque (se pueden recuperar en Opciones). |
 | 🎥 **Cámara libre** | Gira la cámara alrededor del personaje con el joystick derecho, con la colisión con muros del propio juego; R3 la devuelve detrás (no disponible en hardcore). |

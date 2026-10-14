@@ -373,6 +373,9 @@ void FreeCamera::Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, 
 
   float sx = Shape(stick_x);
   const float sy = Shape(stick_y);
+  const float look_yaw = m_look_yaw, look_pitch = m_look_pitch;
+  m_look_yaw = m_look_pitch = 0;
+  const bool mouse = look_yaw != 0 || look_pitch != 0;
   const bool follow = FollowMode(Get16(ram, m_mode)); // el juego usa una cámara que sigue al personaje
 
   // L3: fijar o soltar enemigo. Se elige hacia donde mira la cámara (o el personaje, si la cámara es
@@ -423,7 +426,7 @@ void FreeCamera::Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, 
 
   if (!m_active)
   {
-    if ((sx == 0 && sy == 0 && !keep && !m_lock_obj && m_probe.empty()) || !follow)
+    if ((sx == 0 && sy == 0 && !mouse && !keep && !m_lock_obj && m_probe.empty()) || !follow)
       return;
     // Se empieza desde donde está ahora la cámara del juego: sin saltos.
     const float dx = static_cast<float>(cam[0] - target[0]), dz = static_cast<float>(cam[2] - target[2]);
@@ -551,7 +554,7 @@ void FreeCamera::Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, 
     }
   }
 
-  if (m_returning && (sx != 0 || sy != 0))
+  if (m_returning && (sx != 0 || sy != 0 || mouse))
     m_returning = false; // se vuelve a mover el joystick: se cancela la vuelta
   if (m_returning)
   {
@@ -570,8 +573,10 @@ void FreeCamera::Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, 
   if (m_lock_obj)
     m_world_yaw += std::remainder(m_lock_yaw - m_world_yaw, kTau) * (1.0f - std::exp(-7.0f * dt));
   m_world_yaw += sx * kYawSpeed * m_speed * dt;
-  // Como en los juegos actuales: joystick abajo = la cámara sube y mira hacia abajo.
-  m_pitch = std::clamp(m_pitch + sy * kPitchSpeed * m_speed * dt, kPitchMin, kPitchMax);
+  if (!m_lock_obj)
+    m_world_yaw += look_yaw;
+  // Como en los juegos actuales: joystick (o ratón) abajo = la cámara sube y mira hacia abajo.
+  m_pitch = std::clamp(m_pitch + sy * kPitchSpeed * m_speed * dt + look_pitch, kPitchMin, kPitchMax);
 
   // El juego calcula su posición deseada girando su tabla (fija respecto al mundo: se descuenta
   // el giro del personaje) y con el suavizado congelado no mueve la cámara.

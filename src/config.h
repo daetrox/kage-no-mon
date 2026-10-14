@@ -6,6 +6,11 @@
 constexpr int kPsButtons = 16;
 // Asignación del mando: 0..99 = botón SDL_GameControllerButton, 100+eje = gatillo, -1 = sin asignar.
 constexpr int kPadAxisBase = 100;
+// Botones del ratón en las asignaciones de teclado (esquema teclado y ratón).
+constexpr int kMouseLeft = 1001, kMouseRight = 1002, kMouseMiddle = 1003, kWheelUp = 1004, kWheelDown = 1005;
+// Esquema fijo de teclado y ratón: WASD, ratón para la cámara, Espacio salta, Ctrl agacha, clic
+// izquierdo ataca, clic derecho usa la herramienta, la rueda cambia de herramienta…
+int KbMouseBind(int retro_id);
 
 struct Config
 {
@@ -14,6 +19,9 @@ struct Config
   void DefaultPad();
 
   int key_bind[kPsButtons]; // SDL_Scancode por botón (0 = sin asignar)
+  bool kb_mouse = false;    // esquema de teclado y ratón en lugar de key_bind
+  // Tecla (o botón del ratón) que corresponde a un botón de PS1 con el esquema elegido.
+  int KeyBind(int retro_id) const { return kb_mouse ? KbMouseBind(retro_id) : key_bind[retro_id]; }
   int pad_bind[kPsButtons]; // ver kPadAxisBase
 
   std::string game_path;        // .cue / .bin / .chd seleccionado por el usuario

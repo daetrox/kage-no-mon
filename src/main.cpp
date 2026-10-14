@@ -337,6 +337,7 @@ enum OptRow
   OPT_FREE_CAMERA,
   OPT_CAMERA_SPEED,
   OPT_MOVEMENT,
+  OPT_KB_SCHEME,
   OPT_REMAP_KB,
   OPT_REMAP_PAD,
   OPT_RESET_CONTROLS,
@@ -366,7 +367,7 @@ const std::vector<int>& OptPageRows(int page)
     {OPT_RENDERER, OPT_SCALE, OPT_TEXFILTER, OPT_PGXP, OPT_WIDESCREEN, OPT_SIDEART, OPT_SMOOTH, OPT_FULLSCREEN,
      OPT_BACK},
     {OPT_VOLUME, OPT_MUSIC, OPT_SFX, OPT_BACK},
-    {OPT_PROMPTS, OPT_GAME_PROMPTS, OPT_MOVEMENT, OPT_FREE_CAMERA, OPT_CAMERA_SPEED, OPT_REMAP_KB, OPT_REMAP_PAD, OPT_RESET_CONTROLS, OPT_CONTROLS, OPT_BACK},
+    {OPT_PROMPTS, OPT_GAME_PROMPTS, OPT_KB_SCHEME, OPT_MOVEMENT, OPT_FREE_CAMERA, OPT_CAMERA_SPEED, OPT_REMAP_KB, OPT_REMAP_PAD, OPT_RESET_CONTROLS, OPT_CONTROLS, OPT_BACK},
     {OPT_BACK}, // TRUCOS tiene su propia pantalla
   };
   return pages[std::clamp(page, 0, kOptCategoryCount - 1)];
@@ -456,6 +457,15 @@ std::string KeyLabel(int scancode)
 {
   if (scancode <= 0)
     return "—";
+  switch (scancode)
+  {
+    case kMouseLeft: return "Clic izq.";
+    case kMouseRight: return "Clic der.";
+    case kMouseMiddle: return "Clic central";
+    case kWheelUp: return "Rueda arriba";
+    case kWheelDown: return "Rueda abajo";
+    default: break;
+  }
   const auto sc = static_cast<SDL_Scancode>(scancode);
   switch (sc)
   {
@@ -589,12 +599,15 @@ private:
   // Iconos de botones dentro del juego para el mando en uso.
   std::vector<uint8_t> GameButtonPatches() const
   {
+    Config cfg = m_cfg;
+    for (int id = 0; id < kPsButtons; id++)
+      cfg.key_bind[id] = m_cfg.KeyBind(id);
     GameButtonStyle style = GameButtonStyle::Original;
     if (m_cfg.game_prompts && CurrentStyle() == PromptStyle::Keyboard)
       style = GameButtonStyle::Keyboard;
     else if (m_cfg.game_prompts && CurrentStyle() == PromptStyle::Xbox)
       style = GameButtonStyle::Xbox;
-    return BuildGameButtonPatches(style, m_cfg);
+    return BuildGameButtonPatches(style, cfg);
   }
   void Navigate(int dy, int dx);
   void NavigateImpl(int dy, int dx);
@@ -675,6 +688,9 @@ private:
   EmuInput m_last_input;       // lo último enviado al juego (para la cámara libre)
   bool m_r3_was_down = false;
   bool m_l3_was_down = false;
+  bool m_mouse_captured = false;       // ratón capturado para la cámara (esquema teclado y ratón)
+  float m_look_dx = 0, m_look_dy = 0;  // movimiento del ratón pendiente
+  float m_wheel_up_t = 0, m_wheel_down_t = 0; // pulsación breve de L2/R2 con la rueda
   bool m_mark_visible = false; // marca del enemigo fijado
   float m_mark_x = 0, m_mark_y = 0, m_mark_alpha = 0;
   float m_test_rstick[2] = {}; // pruebas: joystick derecho simulado
@@ -1040,6 +1056,13 @@ void App::StartGame(bool resume)
       m_freecam.RequestLock();
     m_l3_was_down = l3;
     const float dt = static_cast<float>(1.0 / m_emu.TargetFps());
+    if (m_look_dx != 0 || m_look_dy != 0)
+    {
+      // Ratón: 0,0045 rad por píxel con la velocidad de cámara al 100 %.
+      const float k = 0.0045f * m_cfg.camera_speed / 100.0f;
+      m_freecam.AddLook(m_look_dx * k, m_look_dy * k * 0.8f);
+      m_look_dx = m_look_dy = 0;
+    }
     m_freecam.Frame(const_cast<uint8_t*>(ram), n, m_last_input.analog[1][0] / 32767.0f,
                     m_last_input.analog[1][1] / 32767.0f, r3 && !m_r3_was_down, ModernControls(), dt);
     if (ModernControls())
@@ -1323,6 +1346,7 @@ void App::OptionChange(int row, int dir)
     case OPT_GAME_PROMPTS: m_cfg.game_prompts = !m_cfg.game_prompts; break;
     case OPT_FREE_CAMERA: m_cfg.free_camera = !m_cfg.free_camera; break;
     case OPT_MOVEMENT: m_cfg.modern_controls = !m_cfg.modern_controls; break;
+    case OPT_KB_SCHEME: m_cfg.kb_mouse = !m_cfg.kb_mouse; break;
     case OPT_CAMERA_SPEED:
       m_cfg.camera_speed = activate ? (m_cfg.camera_speed >= 300 ? 20 : m_cfg.camera_speed + 10)
                                     : std::clamp(m_cfg.camera_speed + dir * 10, 20, 300);
@@ -1344,7 +1368,7 @@ void App::OptionChange(int row, int dir)
       return;
     case OPT_REMAP_KB:
     case OPT_REMAP_PAD:
-      if (!activate)
+      if (!activate || (row == OPT_REMAP_KB && m_cfg.kb_mouse))
         return;
       m_screen = Screen::Remap;
       m_remap_device = (row == OPT_REMAP_PAD) ? 1 : 0;
@@ -1699,9 +1723,16 @@ EmuInput App::GatherGameInput()
   for (int id = 0; id < kPsButtons; id++)
   {
     bool on = false;
-    const int key = m_cfg.key_bind[id];
+    const int key = m_cfg.KeyBind(id);
     if (key > 0 && key < SDL_NUM_SCANCODES && k[key])
       on = true;
+    else if (key >= kMouseLeft && m_mouse_captured)
+    {
+      const Uint32 mb = SDL_GetMouseState(nullptr, nullptr);
+      on = (key == kMouseLeft && (mb & SDL_BUTTON_LMASK)) || (key == kMouseRight && (mb & SDL_BUTTON_RMASK)) ||
+           (key == kMouseMiddle && (mb & SDL_BUTTON_MMASK)) || (key == kWheelUp && m_wheel_up_t > 0) ||
+           (key == kWheelDown && m_wheel_down_t > 0);
+    }
     const int pad = m_cfg.pad_bind[id];
     if (m_pad && pad >= kPadAxisBase)
       on |= SDL_GameControllerGetAxis(m_pad, static_cast<SDL_GameControllerAxis>(pad - kPadAxisBase)) > 12000;
@@ -2020,6 +2051,13 @@ void App::HandleEvent(const SDL_Event& e)
     }
 
     case SDL_MOUSEWHEEL:
+      if (m_mouse_captured)
+      {
+        // En partida: la rueda cambia de herramienta (L2 / R2 durante un instante).
+        (e.wheel.y > 0 ? m_wheel_up_t : m_wheel_down_t) = 0.12f;
+        m_last_device = PromptStyle::Keyboard;
+        break;
+      }
       if (m_screen == Screen::Achievements)
       {
         const int n = static_cast<int>(m_ach.List().size());
@@ -2035,6 +2073,14 @@ void App::HandleEvent(const SDL_Event& e)
 
     case SDL_MOUSEMOTION:
     {
+      if (m_mouse_captured)
+      {
+        m_look_dx += static_cast<float>(e.motion.xrel);
+        m_look_dy += static_cast<float>(e.motion.yrel);
+        if (e.motion.xrel || e.motion.yrel)
+          m_last_device = PromptStyle::Keyboard;
+        break;
+      }
       int dw, dh, ww, wh;
       SDL_GL_GetDrawableSize(m_window, &dw, &dh);
       SDL_GetWindowSize(m_window, &ww, &wh);
@@ -2067,6 +2113,11 @@ void App::HandleEvent(const SDL_Event& e)
 
     case SDL_MOUSEBUTTONDOWN:
     {
+      if (m_mouse_captured)
+      {
+        m_last_device = PromptStyle::Keyboard; // los clics son botones del juego
+        break;
+      }
       if (e.button.button == SDL_BUTTON_RIGHT)
       {
         if (!(m_screen == Screen::Menu && m_modal == Modal::None))
@@ -2108,6 +2159,21 @@ void App::HandleEvent(const SDL_Event& e)
 void App::Update(float dt)
 {
   m_time += dt;
+  // Esquema teclado y ratón: el ratón se captura en partida (sin pausa ni diálogos, con la
+  // ventana activa) para manejar la cámara.
+  {
+    const bool focused = (SDL_GetWindowFlags(m_window) & SDL_WINDOW_INPUT_FOCUS) != 0;
+    const bool want = m_cfg.kb_mouse && m_screen == Screen::Game && m_emu.IsRunning() && !m_paused &&
+                      m_modal == Modal::None && focused && m_screenshot_path.empty();
+    if (want != m_mouse_captured)
+    {
+      SDL_SetRelativeMouseMode(want ? SDL_TRUE : SDL_FALSE);
+      m_mouse_captured = want;
+      m_look_dx = m_look_dy = 0;
+    }
+    m_wheel_up_t = std::max(0.0f, m_wheel_up_t - dt);
+    m_wheel_down_t = std::max(0.0f, m_wheel_down_t - dt);
+  }
   if (m_emu.IsRunning())
     m_emu.SetButtonPatches(GameButtonPatches()); // sólo actúa si cambia el mando o la asignación
   m_fade = std::min(1.0f, m_fade + dt * 1.2f);
@@ -2479,7 +2545,7 @@ float App::DrawGlyph(PsButton b, float x, float y, float h, PromptStyle style, b
   if (style == PromptStyle::Keyboard)
   {
     if (retro_id(b) >= 0)
-      g.text = KeyLabel(m_cfg.key_bind[retro_id(b)]);
+      g.text = KeyLabel(m_cfg.KeyBind(retro_id(b)));
     else
       switch (b)
       {
@@ -2490,15 +2556,17 @@ float App::DrawGlyph(PsButton b, float x, float y, float h, PromptStyle style, b
           std::string joined;
           for (int i = 0; i < 4; i++)
           {
-            are_arrows &= m_cfg.key_bind[dpad_ids[i]] == arrows[i];
-            joined += (i ? " " : "") + KeyLabel(m_cfg.key_bind[dpad_ids[i]]);
+            are_arrows &= m_cfg.KeyBind(dpad_ids[i]) == arrows[i];
+            joined += (i ? " " : "") + KeyLabel(m_cfg.KeyBind(dpad_ids[i]));
           }
-          g.text = are_arrows ? "Flechas" : joined;
+          g.text = m_cfg.kb_mouse ? "WASD" : are_arrows ? "Flechas" : joined;
           break;
         }
         case PsButton::Accept: g.text = "Enter"; break;
         case PsButton::Back:
         case PsButton::Pause: g.text = "Esc"; break;
+        case PsButton::LStick: g.text = m_cfg.kb_mouse ? "WASD" : "—"; break;
+        case PsButton::RStick: g.text = m_cfg.kb_mouse ? "Ratón" : "—"; break;
         default: g.text = "—"; break;
       }
   }
@@ -2896,7 +2964,10 @@ void App::RenderOptions()
         return {"Iconos dentro del juego", m_cfg.game_prompts ? "Según el mando" : "Originales (PlayStation)", true,
                 true};
       }
-      case OPT_REMAP_KB: return {"Personalizar teclado", ""};
+      case OPT_REMAP_KB:
+        return {"Personalizar teclado", m_cfg.kb_mouse ? "Esquema fijo (teclado y ratón)" : "", !m_cfg.kb_mouse, false};
+      case OPT_KB_SCHEME:
+        return {"Esquema de teclado", m_cfg.kb_mouse ? "Teclado y ratón" : "Sólo teclado", true, true};
       case OPT_REMAP_PAD: return {"Personalizar mando", ""};
       case OPT_RESET_CONTROLS:
         return {"Restaurar controles por defecto", m_reset_confirm > 0 ? "¿Seguro? Pulsa otra vez" : ""};
@@ -3032,6 +3103,10 @@ void App::RenderOptions()
       break;
     case OPT_CONTROLS: help = "Teclado, mando de Xbox y mando de PlayStation, con tus asignaciones."; break;
     case OPT_REMAP_KB: help = "Cambia qué tecla corresponde a cada botón. No afecta al mando."; break;
+    case OPT_KB_SCHEME:
+      help = "Teclado y ratón: WASD para moverse, el ratón mueve la cámara, clic izquierdo ataca, clic derecho usa "
+             "la herramienta y la rueda la cambia. Esquema completo en Ver esquema de controles.";
+      break;
     case OPT_REMAP_PAD: help = "Cambia qué botón del mando corresponde a cada botón. No afecta al teclado."; break;
     case OPT_RESET_CONTROLS: help = "Vuelve a la asignación original de teclado y mando (pide confirmación)."; break;
     default: help = ""; break;
@@ -3405,8 +3480,11 @@ void App::RenderControls()
                           : "F5 guardar · F7 cargar · F11 pantalla completa",
            IX(c0), IY(y + 14), IS(22), kDim);
   if (m_cfg.free_camera && !m_cfg.hardcore)
-    m_r.Text(m_r.ui, "Joystick derecho: cámara libre  ·  R3: cámara del juego  ·  L3: fijar enemigo", IX(c0), IY(y + 44),
-             IS(22), kDim);
+    m_r.Text(m_r.ui,
+             m_cfg.kb_mouse ? "Ratón / joystick derecho: cámara libre  ·  R / R3: cámara del juego  ·  Clic central / L3: "
+                              "fijar enemigo"
+                            : "Joystick derecho: cámara libre  ·  R3: cámara del juego  ·  L3: fijar enemigo",
+             IX(c0), IY(y + 44), IS(22), kDim);
   RenderHints({{PsButton::Back, "Volver"}}, IX(px + pw - 30), IY(py + ph - 64));
 }
 
@@ -3814,6 +3892,16 @@ int App::Run(int argc, char** argv)
             }
           }
         }
+        // TENSHU_TEST_MOUSE="1:2:5:0" mueve el ratón (px por actualización) entre los segundos 1 y 2.
+        if (const char* ms = std::getenv("TENSHU_TEST_MOUSE"))
+        {
+          float t0 = 0, t1 = 0, mx = 0, my = 0;
+          if (std::sscanf(ms, "%f:%f:%f:%f", &t0, &t1, &mx, &my) == 4 && el >= t0 && el < t1)
+          {
+            m_look_dx += mx;
+            m_look_dy += my;
+          }
+        }
         // TENSHU_TEST_STYLE_AT="55:xbox" cambia el estilo de iconos en plena partida.
         if (const char* sa = std::getenv("TENSHU_TEST_STYLE_AT"))
           if (el >= std::atof(sa) && std::strchr(sa, ':'))
@@ -3971,6 +4059,8 @@ int main(int argc, char** argv)
   {
     Config cfg;
     cfg.Load();
+    for (int id = 0; id < kPsButtons; id++)
+      cfg.key_bind[id] = cfg.KeyBind(id);
     const auto xb = PreviewGameButtons(GameButtonStyle::Xbox, cfg);
     const auto kb = PreviewGameButtons(GameButtonStyle::Keyboard, cfg);
     const int h = static_cast<int>(xb.size() / 16);

@@ -201,10 +201,13 @@ struct Label
   std::string text;
   int mini = -1;
   int face = -1; // botón de cara de Xbox: 0 A, 1 B, 2 X, 3 Y
+  int mouse = -1; // ratón: 0 clic izquierdo, 1 derecho, 2 central, 3 rueda arriba, 4 rueda abajo
 };
 
 Label KeyLabel(int scancode)
 {
+  if (scancode >= kMouseLeft && scancode <= kWheelDown)
+    return {"", -1, -1, scancode - kMouseLeft};
   switch (scancode)
   {
     case SDL_SCANCODE_UP: return {"", 3};
@@ -328,6 +331,40 @@ void DrawKeycap(Canvas& c, const Pal& p)
     }
 }
 
+// Ratón: cuerpo ovalado con el botón indicado relleno (o la rueda, con una flecha).
+void DrawMouse(Canvas& c, const Pal& p, int which)
+{
+  const float n = static_cast<float>(c.size), cx = n / 2.0f, rx = n * 0.36f, ry = n * 0.47f, cy = n / 2.0f;
+  const float split = c.size == 16 ? 6.5f : 3.5f;
+  for (int y = 0; y < c.size; y++)
+    for (int x = 0; x < c.size; x++)
+    {
+      const float dx = (x + 0.5f - cx) / rx, dy = (y + 0.5f - cy) / ry, d = dx * dx + dy * dy;
+      if (d > 1.0f)
+        continue;
+      const bool edge = d > (c.size == 16 ? 0.62f : 0.45f);
+      const bool top = y + 0.5f < split;
+      const bool left = x + 0.5f < cx;
+      bool fill = false;
+      if (which == 0) fill = top && left;
+      if (which == 1) fill = top && !left;
+      c.px[y][x] = edge || fill ? p.white : p.keyfill;
+    }
+  // Separación entre botones y rueda.
+  for (int x = 0; x < c.size; x++)
+    if (c.px[static_cast<int>(split)][x] == p.keyfill)
+      c.px[static_cast<int>(split)][x] = p.white;
+  if (which >= 2)
+  {
+    const int wx = c.size / 2 - (c.size == 16 ? 1 : 0), w = c.size == 16 ? 2 : 1;
+    for (int y = c.size == 16 ? 2 : 1; y < split; y++)
+      for (int k = 0; k < w; k++)
+        c.Put(wx + k, y, which == 2 ? p.white : p.outline);
+    if (which >= 3 && c.size == 16)
+      DrawGlyph3(c, kMini[which == 3 ? 3 : 4], 6, 8, p.white); // flecha arriba / abajo bajo la rueda
+  }
+}
+
 void DrawIcon(Canvas& c, const Pal& p, GameButtonStyle style, const Config& cfg, unsigned button)
 {
   for (auto& row : c.px)
@@ -335,6 +372,11 @@ void DrawIcon(Canvas& c, const Pal& p, GameButtonStyle style, const Config& cfg,
       v = p.clear;
   const Label l = style == GameButtonStyle::Keyboard ? KeyLabel(cfg.key_bind[button]) : PadLabel(cfg.pad_bind[button]);
   const bool big = c.size == 16;
+  if (l.mouse >= 0)
+  {
+    DrawMouse(c, p, l.mouse);
+    return;
+  }
   if (l.face >= 0)
   {
     const uint16_t colors[4] = {p.green, p.red, p.blue, p.yellow};

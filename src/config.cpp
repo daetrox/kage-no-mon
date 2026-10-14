@@ -214,6 +214,17 @@ static std::string ConfigFile() { return Paths::ConfigDir() + "/config.ini"; }
 
 // Índices = RETRO_DEVICE_ID_JOYPAD_*:
 // 0 B(✕) 1 Y(□) 2 Select 3 Start 4 Arriba 5 Abajo 6 Izq. 7 Der. 8 A(◯) 9 X(△) 10 L1 11 R1 12 L2 13 R2 14 L3 15 R3
+int KbMouseBind(int id)
+{
+  // Índices = RETRO_DEVICE_ID_JOYPAD_* (ver DefaultKeyboard).
+  static const int binds[kPsButtons] = {
+    SDL_SCANCODE_SPACE, kMouseLeft,   SDL_SCANCODE_TAB, SDL_SCANCODE_RETURN, SDL_SCANCODE_W,     SDL_SCANCODE_S,
+    SDL_SCANCODE_A,     SDL_SCANCODE_D, SDL_SCANCODE_E, kMouseRight,         SDL_SCANCODE_Q,     SDL_SCANCODE_LCTRL,
+    kWheelUp,           kWheelDown,   kMouseMiddle,     SDL_SCANCODE_R,
+  };
+  return id >= 0 && id < kPsButtons ? binds[id] : 0;
+}
+
 void Config::DefaultKeyboard()
 {
   static const int defaults[kPsButtons] = {
@@ -282,6 +293,7 @@ void Config::Load()
     else if (key == "game_prompts") game_prompts = b;
     else if (key == "free_camera") free_camera = b;
     else if (key == "modern_controls") modern_controls = b;
+    else if (key == "kb_mouse") kb_mouse = b;
     else if (key == "camera_speed") camera_speed = std::clamp(std::atoi(val.c_str()), 20, 300);
     else if (key == "cheats") cheats = val;
     else if (key == "hardcore") hardcore = b;
@@ -330,6 +342,7 @@ void Config::Save() const
   out << "game_prompts=" << game_prompts << "\n";
   out << "free_camera=" << free_camera << "\n";
   out << "modern_controls=" << modern_controls << "\n";
+  out << "kb_mouse=" << kb_mouse << "\n";
   out << "camera_speed=" << camera_speed << "\n";
   out << "cheats=" << cheats << "\n";
   out << "hardcore=" << hardcore << "\n";

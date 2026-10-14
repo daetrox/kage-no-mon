@@ -41,6 +41,12 @@ public:
   // y al azar); con los controles de tanque, los que restauran el código original. "" si no hay.
   static std::string BlockPatch(const std::string& serial, bool modern);
   void SetSpeed(float factor) { m_speed = factor; } // 1 = velocidad normal
+  // Ratón: giro (radianes) que se aplica en el siguiente Frame, además del joystick.
+  void AddLook(float dyaw, float dpitch)
+  {
+    m_look_yaw += dyaw;
+    m_look_pitch += dpitch;
+  }
   // Fijar enemigo (L3): en el siguiente Frame fija al enemigo más cercano hacia donde se mira, o
   // suelta el que esté fijado. Los avisos («Enemigo fijado»…) se recogen con TakeLockEvent.
   void RequestLock() { m_lock_request = true; }
@@ -105,6 +111,7 @@ private:
   int32_t m_written[6] = {};                // última posición escrita (cámara y punto de mira)
   bool m_have_written = false;
   float m_speed = 1.0f;
+  float m_look_yaw = 0, m_look_pitch = 0; // giro pendiente del ratón
   int32_t m_last_target[3] = {}; // posición del personaje en el frame anterior
 
   // Enemigo fijado (offset de su estructura en la RAM; 0 = ninguno).
