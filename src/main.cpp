@@ -674,6 +674,7 @@ private:
   FreeCamera m_freecam;
   EmuInput m_last_input;       // lo último enviado al juego (para la cámara libre)
   bool m_r3_was_down = false;
+  bool m_l3_was_down = false;
   float m_test_rstick[2] = {}; // pruebas: joystick derecho simulado
   float m_test_lstick[2] = {}; // y el izquierdo
   float m_move[2] = {};        // dirección pedida para los controles 360° (relativa a la cámara)
@@ -991,7 +992,10 @@ void App::StartGame(bool resume)
     const uint8_t* ram = m_emu.SystemRam(&n);
     // Pruebas: TENSHU_TEST_POKE="13f1ce+=8,92580:32=41000" escribe (o suma) palabras de 16 bits
     // (o de 32 con ":32") en la RAM tras cada frame.
-    if (const char* poke = std::getenv("TENSHU_TEST_POKE"); poke && ram)
+    // TENSHU_TEST_POKE_FRAMES=N: sólo durante los N primeros frames.
+    const char* poke_frames = std::getenv("TENSHU_TEST_POKE_FRAMES");
+    if (const char* poke = std::getenv("TENSHU_TEST_POKE");
+        poke && ram && (!poke_frames || m_emu.FramesRun() < static_cast<uint64_t>(std::atoll(poke_frames))))
     {
       std::stringstream ss(poke);
       std::string item;
@@ -1028,12 +1032,25 @@ void App::StartGame(bool resume)
     }
     // Cámara libre con el joystick derecho (R3 = cámara del juego).
     const bool r3 = m_last_input.buttons & (1u << RETRO_DEVICE_ID_JOYPAD_R3);
+    // L3: fijar / soltar enemigo.
+    const bool l3 = m_last_input.buttons & (1u << RETRO_DEVICE_ID_JOYPAD_L3);
+    if (l3 && !m_l3_was_down)
+      m_freecam.RequestLock();
+    m_l3_was_down = l3;
     const float dt = static_cast<float>(1.0 / m_emu.TargetFps());
     m_freecam.Frame(const_cast<uint8_t*>(ram), n, m_last_input.analog[1][0] / 32767.0f,
                     m_last_input.analog[1][1] / 32767.0f, r3 && !m_r3_was_down, ModernControls(), dt);
     if (ModernControls())
       m_freecam.Steer(const_cast<uint8_t*>(ram), n, m_move[0], m_move[1], dt);
     m_r3_was_down = r3;
+    switch (m_freecam.TakeLockEvent())
+    {
+      case FreeCamera::LockEvent::Locked: Toast("Enemigo fijado"); break;
+      case FreeCamera::LockEvent::Released: Toast("Enemigo soltado"); break;
+      case FreeCamera::LockEvent::NoTarget: Toast("No hay enemigos cerca"); break;
+      case FreeCamera::LockEvent::Lost: Toast("Enemigo perdido"); break;
+      default: break;
+    }
     m_ach.DoFrame(ram, n);
   };
 
@@ -2993,8 +3010,8 @@ void App::RenderOptions()
              "puedes hacer clic en la barra.";
       break;
     case OPT_FREE_CAMERA:
-      help = "Gira la cámara alrededor del personaje con el joystick derecho, respetando los muros como la cámara "
-             "del juego. R3 la devuelve detrás. Al apuntar o mirar con L1 manda el juego. No en hardcore.";
+      help = "Joystick derecho: gira la cámara (respeta los muros). R3: la devuelve detrás. L3: fija al enemigo "
+             "más cercano (joystick derecho a un lado cambia de enemigo). No en hardcore.";
       break;
     case OPT_GAME_PROMPTS:
       help = "Los iconos de botones de los menús del juego se cambian por los de tu mando de Xbox o tu teclado, "
@@ -3375,7 +3392,8 @@ void App::RenderControls()
                           : "F5 guardar · F7 cargar · F11 pantalla completa",
            IX(c0), IY(y + 14), IS(22), kDim);
   if (m_cfg.free_camera && !m_cfg.hardcore)
-    m_r.Text(m_r.ui, "Joystick derecho: cámara libre  ·  R3: cámara del juego", IX(c0), IY(y + 44), IS(22), kDim);
+    m_r.Text(m_r.ui, "Joystick derecho: cámara libre  ·  R3: cámara del juego  ·  L3: fijar enemigo", IX(c0), IY(y + 44),
+             IS(22), kDim);
   RenderHints({{PsButton::Back, "Volver"}}, IX(px + pw - 30), IY(py + ph - 64));
 }
 
@@ -3733,6 +3751,7 @@ int App::Run(int argc, char** argv)
           else if (b == "l2") id = RETRO_DEVICE_ID_JOYPAD_L2;
           else if (b == "r2") id = RETRO_DEVICE_ID_JOYPAD_R2;
           else if (b == "r3") id = RETRO_DEVICE_ID_JOYPAD_R3;
+          else if (b == "l3") id = RETRO_DEVICE_ID_JOYPAD_L3;
           script.push_back({std::atof(item.substr(0, c).c_str()), id, hold});
         }
       }

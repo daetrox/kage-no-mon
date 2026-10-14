@@ -37,6 +37,17 @@ public:
   // y al azar); con los controles de tanque, los que restauran el código original. "" si no hay.
   static std::string BlockPatch(const std::string& serial, bool modern);
   void SetSpeed(float factor) { m_speed = factor; } // 1 = velocidad normal
+  // Fijar enemigo (L3): en el siguiente Frame fija al enemigo más cercano hacia donde se mira, o
+  // suelta el que esté fijado. Los avisos («Enemigo fijado»…) se recogen con TakeLockEvent.
+  void RequestLock() { m_lock_request = true; }
+  bool Locked() const { return m_lock_obj != 0; }
+  enum class LockEvent { None, Locked, Released, NoTarget, Lost };
+  LockEvent TakeLockEvent()
+  {
+    const LockEvent e = m_lock_event;
+    m_lock_event = LockEvent::None;
+    return e;
+  }
   bool Active() const { return m_active; }
   // Devuelve la tabla y el suavizado del juego a su estado original (antes de guardar un estado, al
   // ceder la cámara al juego…); se vuelven a modificar en el siguiente frame si hace falta.
@@ -44,6 +55,11 @@ public:
 
 private:
   void Apply(uint8_t* ram, float yaw, float pitch);
+  // Enemigo vivo más cercano a la dirección (face_x, face_z), sólo del lado `side` (-1 izquierda,
+  // +1 derecha, 0 cualquiera) y distinto de `exclude`; 0 si no hay.
+  uint32_t FindEnemy(const uint8_t* ram, size_t size, const int32_t player[3], float face_x, float face_z,
+                     int side, uint32_t exclude) const;
+  bool EnemyPos(const uint8_t* ram, size_t size, uint32_t obj, int32_t pos[3]) const;
 
   // Offsets en la RAM.
   uint32_t m_table_begin = 0, m_table_end = 0; // tabla de vectores de la cámara
@@ -53,6 +69,7 @@ private:
   uint32_t m_target = 0;                        // punto al que mira la cámara (justo detrás)
   uint32_t m_smooth = 0;                        // parámetros del suavizado de la posición
   uint32_t m_smooth_target = 0;                 // y del punto al que mira
+  uint32_t m_char_list = 0;                     // lista de personajes (punteros; 0 = fin)
 
   std::vector<int16_t> m_original; // copia de la tabla sin tocar
   int16_t m_smooth_original[3] = {}, m_smooth_target_original[3] = {};
@@ -73,4 +90,11 @@ private:
   bool m_have_written = false;
   float m_speed = 1.0f;
   int32_t m_last_target[3] = {}; // posición del personaje en el frame anterior
+
+  // Enemigo fijado (offset de su estructura en la RAM; 0 = ninguno).
+  uint32_t m_lock_obj = 0;
+  bool m_lock_request = false;
+  bool m_flick_ready = true; // el joystick derecho volvió al centro (para cambiar de enemigo)
+  LockEvent m_lock_event = LockEvent::None;
+  float m_lock_yaw = 0; // ángulo del personaje mirando al enemigo (y de la cámara tras él)
 };

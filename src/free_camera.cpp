@@ -18,12 +18,13 @@ struct GameCamera
   uint32_t smooth;                 // suavizado de la posición (0x80051B10): desplazamiento,
                                    // aceleración, velocidad y la diferencia con la posición deseada
   uint32_t smooth_target;          // suavizado del punto de mira (mismo formato)
+  uint32_t char_list;              // punteros a los personajes del nivel (el primero, el jugador)
 };
 
 // Localizadas con volcados de RAM y desensamblando el código de la cámara: 0x800529F8 / 0x80051FB4
 // rotan la tabla, 0x800524D0 comprueba la colisión y 0x80051B10 suaviza. Tenchu 2, PAL España.
 const GameCamera kGames[] = {
-  {"SLES-02465", 0x81DE4, 0x82364, 0x8CB18, 0x8CB2C, 0x92580, 0x828D8, 0x828C8},
+  {"SLES-02465", 0x81DE4, 0x82364, 0x8CB18, 0x8CB2C, 0x92580, 0x828D8, 0x828C8, 0xC0ED0},
 };
 
 constexpr float kDeadZone = 0.22f;
@@ -36,6 +37,10 @@ constexpr float kTau = 6.28318530718f;
 constexpr float kBaseHeight = 0x73A;
 // Distancia ante un muro: se acerca deprisa y se aleja despacio (fracción por segundo, aprox.).
 constexpr float kPullIn = 14.0f, kPullOut = 2.5f, kHeightRate = 6.0f;
+// Fijar enemigo: alcance al fijar y distancia a la que se suelta (unidades del juego; la cámara va
+// a ~3000 del personaje), y cuánto se desplaza el punto de mira hacia el enemigo.
+constexpr float kLockRange = 9000.0f, kLockLose = 14000.0f, kLockLookShift = 0.3f;
+constexpr int kMaxCharacters = 64;
 
 // Modos de cámara del juego que siguen al personaje: 0 quieto, 2 girando en el sitio, 3 andando o
 // corriendo, 4 agachado. Con los demás (6 mirar con L1, 20 apuntar, nadar, cinemáticas…) manda el juego.
@@ -105,6 +110,7 @@ bool FreeCamera::SetGame(const std::string& serial)
       m_target = g.cam + 12;
       m_smooth = g.smooth;
       m_smooth_target = g.smooth_target;
+      m_char_list = g.char_list;
     }
   return Available();
 }
@@ -158,6 +164,53 @@ void FreeCamera::Apply(uint8_t* ram, float yaw, float pitch)
   m_modified = true;
 }
 
+bool FreeCamera::EnemyPos(const uint8_t* ram, size_t size, uint32_t obj, int32_t pos[3]) const
+{
+  // Personaje: +0 clase (0 = jugador), +8 vida, +0x2C puntero a su posición.
+  if (!obj || obj + 0x30 > size || Get16(ram, obj) == 0 || Get16(ram, obj + 8) <= 0)
+    return false;
+  const uint32_t p = Get32(ram, obj + 0x2C) & 0x1FFFFF;
+  if (!p || p + 12 > size)
+    return false;
+  std::memcpy(pos, ram + p, 12);
+  return true;
+}
+
+uint32_t FreeCamera::FindEnemy(const uint8_t* ram, size_t size, const int32_t player[3], float face_x,
+                               float face_z, int side, uint32_t exclude) const
+{
+  if (!m_char_list || m_char_list + 4 * kMaxCharacters > size)
+    return 0;
+  uint32_t best = 0;
+  float best_score = 0;
+  for (int i = 0; i < kMaxCharacters; i++)
+  {
+    const uint32_t ptr = Get32(ram, m_char_list + 4 * i);
+    if (!ptr)
+      break;
+    const uint32_t obj = ptr & 0x1FFFFF;
+    int32_t e[3];
+    if (obj == exclude || (ptr & 0xFF000000) != 0x80000000 || !EnemyPos(ram, size, obj, e))
+      continue;
+    const float dx = static_cast<float>(e[0] - player[0]), dz = static_cast<float>(e[2] - player[2]);
+    const float dist = std::sqrt(dx * dx + dz * dz);
+    if (dist > kLockRange || dist < 1.0f)
+      continue;
+    // Ángulo respecto a hacia donde se mira (0..pi) y lado (producto vectorial).
+    const float ang = std::acos(std::clamp((dx * face_x + dz * face_z) / dist, -1.0f, 1.0f));
+    const float cross = face_x * dz - face_z * dx;
+    if (side != 0 && (side > 0 ? cross > 0 : cross < 0))
+      continue;
+    const float score = dist * (1.0f + 1.5f * ang / 3.14159265f);
+    if (!best || score < best_score)
+    {
+      best = obj;
+      best_score = score;
+    }
+  }
+  return best;
+}
+
 void FreeCamera::Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, bool reset, bool keep, float dt)
 {
   if (!ram || !Available() || m_table_end > size || m_target + 12 > size || m_mode + 2 > size ||
@@ -196,14 +249,73 @@ void FreeCamera::Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, 
   std::memcpy(cam, ram + m_cam, sizeof(cam));
 
   // R3: la cámara gira hasta quedar detrás del personaje y después manda el juego.
+  if (reset && m_lock_obj)
+  {
+    m_lock_obj = 0;
+    m_lock_event = LockEvent::Released;
+  }
   if (reset && m_active)
     m_returning = true;
 
-  const float sx = Shape(stick_x), sy = Shape(stick_y);
+  float sx = Shape(stick_x);
+  const float sy = Shape(stick_y);
   const bool follow = FollowMode(Get16(ram, m_mode)); // el juego usa una cámara que sigue al personaje
+
+  // L3: fijar o soltar enemigo. Se elige hacia donde mira la cámara (o el personaje, si la cámara es
+  // la del juego); con un ángulo `a`, la vista va en la dirección -(sin a, cos a).
+  if (m_lock_request)
+  {
+    m_lock_request = false;
+    if (m_lock_obj)
+    {
+      m_lock_obj = 0;
+      m_lock_event = LockEvent::Released;
+    }
+    else if (follow)
+    {
+      const float look = m_active ? m_world_yaw : player_yaw;
+      m_lock_obj = FindEnemy(ram, size, player, -std::sin(look), -std::cos(look), 0, 0);
+      m_lock_event = m_lock_obj ? LockEvent::Locked : LockEvent::NoTarget;
+      m_returning = false;
+      m_flick_ready = false;
+    }
+  }
+  int32_t enemy[3] = {};
+  if (m_lock_obj)
+  {
+    const bool alive = EnemyPos(ram, size, m_lock_obj, enemy);
+    const float ex = static_cast<float>(enemy[0] - player[0]), ez = static_cast<float>(enemy[2] - player[2]);
+    if (!alive || ex * ex + ez * ez > kLockLose * kLockLose)
+    {
+      m_lock_obj = 0;
+      m_lock_event = LockEvent::Lost;
+    }
+    else
+    {
+      // Joystick derecho a un lado (desde el centro): cambia al enemigo de ese lado.
+      if (std::fabs(stick_x) < 0.3f)
+        m_flick_ready = true;
+      else if (m_flick_ready && std::fabs(stick_x) > 0.7f)
+      {
+        m_flick_ready = false;
+        const float len = std::max(1.0f, std::sqrt(ex * ex + ez * ez));
+        if (const uint32_t next =
+              FindEnemy(ram, size, player, ex / len, ez / len, stick_x > 0 ? 1 : -1, m_lock_obj))
+        {
+          m_lock_obj = next;
+          EnemyPos(ram, size, m_lock_obj, enemy);
+          m_lock_event = LockEvent::Locked;
+        }
+      }
+      sx = 0; // el giro manual queda en manos del fijado
+      // El personaje mira al enemigo y la cámara queda detrás de él, en el mismo ángulo.
+      m_lock_yaw = std::atan2(static_cast<float>(player[0] - enemy[0]), static_cast<float>(player[2] - enemy[2]));
+    }
+  }
+
   if (!m_active)
   {
-    if ((sx == 0 && sy == 0 && !keep) || !follow)
+    if ((sx == 0 && sy == 0 && !keep && !m_lock_obj) || !follow)
       return;
     // Se empieza desde donde está ahora la cámara del juego: sin saltos.
     const float dx = static_cast<float>(cam[0] - target[0]), dz = static_cast<float>(cam[2] - target[2]);
@@ -285,6 +397,8 @@ void FreeCamera::Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, 
       return;
     }
   }
+  if (m_lock_obj)
+    m_world_yaw += std::remainder(m_lock_yaw - m_world_yaw, kTau) * (1.0f - std::exp(-7.0f * dt));
   m_world_yaw += sx * kYawSpeed * m_speed * dt;
   // Como en los juegos actuales: joystick abajo = la cámara sube y mira hacia abajo.
   m_pitch = std::clamp(m_pitch + sy * kPitchSpeed * m_speed * dt, kPitchMin, kPitchMax);
@@ -309,7 +423,7 @@ void FreeCamera::Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, 
 
   // Órbita alrededor de la cabeza del personaje, mirándola (posición de la cámara y punto de mira).
   const int32_t head[3] = {player[0], player[1] + static_cast<int32_t>(std::lround(m_head)), player[2]};
-  const int32_t pos[6] = {
+  int32_t pos[6] = {
     head[0] + static_cast<int32_t>(std::lround(m_dist * std::sin(m_world_yaw))),
     head[1] + static_cast<int32_t>(std::lround(m_height)),
     head[2] + static_cast<int32_t>(std::lround(m_dist * std::cos(m_world_yaw))),
@@ -317,6 +431,12 @@ void FreeCamera::Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, 
     head[1],
     head[2],
   };
+  // Con un enemigo fijado, el punto de mira se adelanta hacia él para encuadrar a los dos.
+  if (m_lock_obj)
+  {
+    pos[3] += static_cast<int32_t>(std::lround((enemy[0] - player[0]) * kLockLookShift));
+    pos[5] += static_cast<int32_t>(std::lround((enemy[2] - player[2]) * kLockLookShift));
+  }
   if (std::getenv("TENSHU_DEBUG_CAMERA"))
     std::fprintf(stderr, "camara: juego %.0f/%.0f -> libre %.0f/%.0f\n", m_game_dist, m_game_height, m_dist,
                  m_height);
@@ -337,6 +457,15 @@ void FreeCamera::Steer(uint8_t* ram, size_t size, float move_x, float move_y, fl
   m_steerable = true;
   const float mag = std::sqrt(move_x * move_x + move_y * move_y);
   const float current = (Get16(ram, rot + 2) & 0xFFF) * kTau / 4096.0f;
+  if (mag < 0.25f && m_lock_obj)
+  {
+    // Quieto con un enemigo fijado: el personaje se gira hacia él.
+    const float yaw = current + std::remainder(m_lock_yaw - current, kTau) * (1.0f - std::exp(-12.0f * dt));
+    const int16_t value = static_cast<int16_t>(static_cast<int>(std::lround(yaw / kTau * 4096.0f)) & 0xFFF);
+    std::memcpy(ram + rot + 2, &value, 2);
+    m_steer_yaw = yaw;
+    return;
+  }
   if (mag < 0.25f)
   {
     m_steer_yaw = current;
