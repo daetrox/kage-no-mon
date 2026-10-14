@@ -268,6 +268,7 @@ void Config::Load()
     else if (key == "hardware_renderer") hardware_renderer = b;
     else if (key == "resolution_scale") resolution_scale = std::atoi(val.c_str());
     else if (key == "pgxp") pgxp = b;
+    else if (key == "pgxp_cpu") pgxp_cpu = b;
     else if (key == "texture_filter") texture_filter = val;
     else if (key == "side_art") side_art = b;
     else if (key == "widescreen") widescreen = b;
@@ -315,6 +316,7 @@ void Config::Save() const
   out << "hardware_renderer=" << hardware_renderer << "\n";
   out << "resolution_scale=" << resolution_scale << "\n";
   out << "pgxp=" << pgxp << "\n";
+  out << "pgxp_cpu=" << pgxp_cpu << "\n";
   out << "texture_filter=" << texture_filter << "\n";
   out << "side_art=" << side_art << "\n";
   out << "widescreen=" << widescreen << "\n";

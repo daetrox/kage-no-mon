@@ -406,6 +406,10 @@ void Emulator::BuildOptions(const Config& cfg)
   opt("swanstation_GPU_Renderer", cfg.hardware_renderer ? "OpenGL" : "Software");
   opt("swanstation_GPU_ResolutionScale", std::to_string(cfg.hardware_renderer ? cfg.resolution_scale : 1));
   opt("swanstation_GPU_PGXPEnable", flag(cfg.hardware_renderer && cfg.pgxp));
+  // Tenchu 2 calcula parte del escenario (el suelo, sobre todo) con la CPU: sin este modo, sus
+  // texturas se deforman y parecen «respirar» al mover la cámara.
+  opt("swanstation_GPU_PGXPCPU", flag(cfg.hardware_renderer && cfg.pgxp && cfg.pgxp_cpu));
+  opt("swanstation_GPU_PGXPVertexCache", flag(cfg.hardware_renderer && cfg.pgxp && cfg.pgxp_cpu));
   opt("swanstation_GPU_TextureFilter", cfg.hardware_renderer ? cfg.texture_filter : "Nearest");
   opt("swanstation_GPU_PGXPCulling", "true");
   opt("swanstation_GPU_PGXPTextureCorrection", "true");

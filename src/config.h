@@ -23,6 +23,7 @@ struct Config
   int resolution_scale = 4;      // 1, 2, 4 o 5 (3x corrompe el texto de Tenchu 2 en SwanStation)
   std::string texture_filter = "xBR"; // Nearest, Bilinear, JINC2, xBR (suavizado "HD" de texturas)
   bool pgxp = true;              // corrige el "temblor" de polígonos
+  bool pgxp_cpu = true;          // PGXP también para la geometría que el juego calcula con la CPU
   bool widescreen = false;       // 16:9 mediante parche del propio juego (si existe para el disco)
   bool side_art = true;          // rellenar los laterales (4:3 en pantalla ancha) con la ilustración
   bool smooth_filter = false;    // filtrado bilineal al escalar la imagen

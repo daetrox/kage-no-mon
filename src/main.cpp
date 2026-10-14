@@ -1281,7 +1281,15 @@ void App::OptionChange(int row, int dir)
       m_cfg.texture_filter = filters[idx];
       break;
     }
-    case OPT_PGXP: m_cfg.pgxp = !m_cfg.pgxp; break;
+    case OPT_PGXP:
+    {
+      // No → Sí → Máxima (con la CPU)
+      int level = !m_cfg.pgxp ? 0 : m_cfg.pgxp_cpu ? 2 : 1;
+      level = activate ? (level + 1) % 3 : std::clamp(level + dir, 0, 2);
+      m_cfg.pgxp = level > 0;
+      m_cfg.pgxp_cpu = level == 2;
+      break;
+    }
     case OPT_WIDESCREEN:
       if (!m_ws_available)
         return;
@@ -2838,7 +2846,8 @@ void App::RenderOptions()
                                                                      : m_cfg.texture_filter + " (HD)";
         return {"Filtro de texturas", tf, hw, true};
       }
-      case OPT_PGXP: return {"Corregir geometría (PGXP)", yesno(m_cfg.pgxp), hw, true};
+      case OPT_PGXP:
+        return {"Corregir geometría (PGXP)", !m_cfg.pgxp ? "No" : m_cfg.pgxp_cpu ? "Máxima" : "Sí", hw, true};
       case OPT_WIDESCREEN:
         return {"Aspecto de la pantalla",
                 m_ws_available ? (m_cfg.widescreen ? "16:9" : "4:3") : "4:3 (16:9 no disponible para este disco)",
@@ -2988,7 +2997,10 @@ void App::RenderOptions()
              "del juego.";
       break;
     case OPT_TEXFILTER: help = "xBR y JINC2 redibujan las texturas en alta definición. Original = píxeles tal cual."; break;
-    case OPT_PGXP: help = "Reduce el temblor de los polígonos y la deformación de texturas."; break;
+    case OPT_PGXP:
+      help = "Evita que polígonos y texturas tiemblen o «respiren». Máxima corrige también el suelo y el "
+             "escenario (usa algo más de CPU).";
+      break;
     case OPT_WIDESCREEN:
       help = "4:3 es el formato original. 16:9 usa un parche del propio juego (El_Patas y PeterDelta): más campo de "
              "visión; el HUD queda en su sitio, aunque algo más ancho.";
