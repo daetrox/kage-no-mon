@@ -9,7 +9,6 @@
 #include "cheats.h"
 #include "free_camera.h"
 #include "game_buttons.h"
-#include "pad_layout.h"
 #include "platform.h"
 #include "config.h"
 #include "emulator.h"
@@ -632,8 +631,6 @@ private:
 
   Texture m_bg, m_fire, m_btn_sel, m_btn_normal;
   Texture m_ic_play, m_ic_ach, m_ic_opt, m_ic_quit;
-  Texture m_pad_xbox, m_pad_ps;   // ilustraciones del esquema de controles
-  int m_ctl_view = -1;            // esquema mostrado: -1 = el dispositivo en uso; 0 teclado, 1 Xbox, 2 PS
   Texture m_logo, m_tagline;
 
   Screen m_screen = Screen::Menu;
@@ -768,8 +765,6 @@ bool App::Init(std::string* error)
   ok &= m_r.LoadTexture(ui + "icon_achievements.png", &m_ic_ach, true);
   ok &= m_r.LoadTexture(ui + "icon_options.png", &m_ic_opt, true);
   ok &= m_r.LoadTexture(ui + "icon_quit.png", &m_ic_quit, true);
-  ok &= m_r.LoadTexture(ui + "pad_xbox.png", &m_pad_xbox, true);
-  ok &= m_r.LoadTexture(ui + "pad_ps.png", &m_pad_ps, true);
   if (!ok)
   {
     *error = "Faltan imágenes de la interfaz en " + ui;
@@ -1107,10 +1102,7 @@ void App::ActivatePause(int index)
       }
       resume();
       break;
-    case 3:
-      m_screen = Screen::Controls;
-      m_ctl_view = -1;
-      break;
+    case 3: m_screen = Screen::Controls; break;
     case 4:
       StopGame(true);
       m_screen = Screen::Menu;
@@ -1348,10 +1340,7 @@ void App::OptionChange(int row, int dir)
     }
     case OPT_CONTROLS:
       if (activate)
-      {
         m_screen = Screen::Controls;
-        m_ctl_view = -1;
-      }
       return;
     case OPT_REMAP_KB:
     case OPT_REMAP_PAD:
@@ -1436,14 +1425,6 @@ void App::NavigateImpl(int dy, int dx)
   {
     case Screen::Menu: m_sel = (m_sel + dy + kMenuItems) % kMenuItems; break;
     case Screen::Credits: m_credits_target += dy * 120.0f; break;
-    case Screen::Controls:
-      if (dx)
-      {
-        const int cur = m_ctl_view >= 0 ? m_ctl_view : static_cast<int>(CurrentStyle());
-        m_ctl_view = (cur + dx + 3) % 3;
-        m_audio.Play(Sfx::Move);
-      }
-      break;
     case Screen::Cheats:
     {
       // Filas: los trucos, "Desactivar todos" y "Volver".
@@ -3386,325 +3367,46 @@ void App::RenderConfirmReset()
   RenderHints({{PsButton::Accept, "Aceptar"}, {PsButton::Back, "Cancelar"}}, IX(x + w - 30), IY(y + h + 16));
 }
 
-namespace {
-// Funciones de cada botón del mando de PS1 (índice RETRO_DEVICE_ID_JOYPAD_*), comprobadas en el juego.
-const char* PsFunction(int id, bool free_cam)
-{
-  switch (id)
-  {
-    case 0: return "Saltar";
-    case 1: return "Atacar · desenvainar";
-    case 2: return "Mapa (mantener)";
-    case 3: return "Pausa del juego";
-    case 4: case 5: case 6: case 7: return "Moverse";
-    case 8: return "Guardar arma (x2)";
-    case 9: return "Usar objeto";
-    case 10: return "Mirar";
-    case 11: return "Agacharse";
-    case 12: case 13: return "Cambiar objeto";
-    case 14: return free_cam ? "Fijar enemigo (pulsar)" : nullptr;
-    case 15: return free_cam ? "Centrar cámara (pulsar)" : nullptr;
-    default: return nullptr;
-  }
-}
-
-int PadPartOf(int bind)
-{
-  if (bind >= kPadAxisBase)
-    return static_cast<int>((bind - kPadAxisBase) == SDL_CONTROLLER_AXIS_TRIGGERLEFT ? PadPart::LT : PadPart::RT);
-  switch (bind)
-  {
-    case SDL_CONTROLLER_BUTTON_A: return static_cast<int>(PadPart::A);
-    case SDL_CONTROLLER_BUTTON_B: return static_cast<int>(PadPart::B);
-    case SDL_CONTROLLER_BUTTON_X: return static_cast<int>(PadPart::X);
-    case SDL_CONTROLLER_BUTTON_Y: return static_cast<int>(PadPart::Y);
-    case SDL_CONTROLLER_BUTTON_LEFTSHOULDER: return static_cast<int>(PadPart::LB);
-    case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: return static_cast<int>(PadPart::RB);
-    case SDL_CONTROLLER_BUTTON_LEFTSTICK: return static_cast<int>(PadPart::LS);
-    case SDL_CONTROLLER_BUTTON_RIGHTSTICK: return static_cast<int>(PadPart::RS);
-    case SDL_CONTROLLER_BUTTON_BACK: return static_cast<int>(PadPart::BACK);
-    case SDL_CONTROLLER_BUTTON_START: return static_cast<int>(PadPart::START);
-    case SDL_CONTROLLER_BUTTON_GUIDE: return static_cast<int>(PadPart::GUIDE);
-    case SDL_CONTROLLER_BUTTON_DPAD_UP:
-    case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
-    case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
-    case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: return static_cast<int>(PadPart::DPAD);
-    default: return -1;
-  }
-}
-
-void AddUnique(std::vector<std::string>& v, const std::string& s)
-{
-  if (std::find(v.begin(), v.end(), s) == v.end())
-    v.push_back(s);
-}
-
-// Teclado dibujado: filas con el ancho de cada tecla en unidades (1 = tecla normal).
-struct KeyCap
-{
-  int sc;
-  float w;
-  const char* label;
-};
-} // namespace
-
 void App::RenderControls()
 {
   DimScreen(m_emu.IsRunning() ? 0.75f : 0.5f);
-  const float px = 40, py = 40, pw = 1456, ph = 944;
+  const float px = 40, py = 56, pw = 1060, ph = 950;
   Panel(px, py, pw, ph);
   m_r.Text(m_r.brush, "CONTROLES", IX(px + 44), IY(py + 20), IS(56), kWhite);
 
-  const int view = m_ctl_view >= 0 ? m_ctl_view : static_cast<int>(CurrentStyle());
-  const char* names[3] = {"TECLADO", "MANDO DE XBOX", "MANDO DE PLAYSTATION"};
-  // Selector de esquema: ‹ NOMBRE ›
-  const float sx = px + pw - 70;
-  m_r.DrawIcon(Icon::ArrowRight, IX(sx), IY(py + 40), IS(22), WithAlpha(kWhite, 0.8f));
-  const float nw = m_r.TextWidth(m_r.ui, names[view], IS(28)) / m_s;
-  m_r.Text(m_r.ui, names[view], IX(sx - 16), IY(py + 36), IS(28), kGold, Align::Right);
-  m_r.DrawIcon(Icon::ArrowLeft, IX(sx - 52 - nw), IY(py + 40), IS(22), WithAlpha(kWhite, 0.8f));
-  m_r.Text(m_r.ui, m_ctl_view < 0 ? "dispositivo en uso" : "", IX(sx - 16), IY(py + 74), IS(19), kDim, Align::Right);
-  Hot(IR({sx - 70 - nw, py + 30, nw + 110, 50}), 6, 0, [this](float mx, float) {
-    const int cur = m_ctl_view >= 0 ? m_ctl_view : static_cast<int>(CurrentStyle());
-    m_ctl_view = (cur + 1) % 3;
-    m_audio.Play(Sfx::Move);
-  });
-
-  const bool free_cam = m_cfg.free_camera && !m_cfg.hardcore;
-  const Color line_c = {0.86f, 0.16f, 0.1f, 0.85f}, txt_c = {0.93f, 0.91f, 0.88f, 1};
-  // Línea en codo (horizontal + vertical) de (x0,y0) a (x1,y1), en coordenadas de diseño.
-  auto elbow = [&](float x0, float y0, float x1, float y1, bool vertical_first) {
-    const float t = 2.0f;
-    auto hline = [&](float a, float b, float y) {
-      m_r.Rect(IX(std::min(a, b)), IY(y - t / 2), IS(std::fabs(b - a) + t), IS(t), UiMode::Solid, line_c);
-    };
-    auto vline = [&](float a, float b, float x) {
-      m_r.Rect(IX(x - t / 2), IY(std::min(a, b)), IS(t), IS(std::fabs(b - a) + t), UiMode::Solid, line_c);
-    };
-    if (vertical_first)
-    {
-      vline(y0, y1, x0);
-      hline(x0, x1, y1);
-    }
-    else
-    {
-      hline(x0, x1, y0);
-      vline(y0, y1, x1);
-    }
-    m_r.Rect(IX(x0 - 4), IY(y0 - 4), IS(8), IS(8), UiMode::Solid, {1, 0.85f, 0.4f, 1});
+  struct Row
+  {
+    const char* action;
+    PsButton b;
   };
-
-  const float area_top = py + 120, area_bot = py + ph - 110;
-  if (view == 0)
+  const Row rows[] = {
+    {"Moverse", PsButton::LStick}, {"Cruceta", PsButton::DPad},      {"Cruz", PsButton::Cross},
+    {"Círculo", PsButton::Circle}, {"Cuadrado", PsButton::Square},   {"Triángulo", PsButton::Triangle},
+    {"L1", PsButton::L1},          {"R1", PsButton::R1},             {"L2", PsButton::L2},
+    {"R2", PsButton::R2},          {"Start", PsButton::Start},       {"Select", PsButton::Select},
+    {"Pausa del launcher", PsButton::Pause},
+  };
+  const float c0 = px + 52, c1 = px + 430, c2 = px + 650, c3 = px + 860;
+  m_r.Text(m_r.ui, "BOTÓN DE PS1", IX(c0), IY(py + 104), IS(23), kDim);
+  m_r.Text(m_r.ui, "TECLADO", IX(c1), IY(py + 104), IS(23), kDim);
+  m_r.Text(m_r.ui, "XBOX", IX(c2), IY(py + 104), IS(23), kDim);
+  m_r.Text(m_r.ui, "PLAYSTATION", IX(c3), IY(py + 104), IS(23), kDim);
+  float y = py + 146;
+  for (const Row& r : rows)
   {
-    // --- Teclado ---
-    std::map<int, std::vector<std::string>> fn;
-    for (int id = 0; id < kPsButtons; id++)
-      if (const char* f = PsFunction(id, false))
-        if (m_cfg.key_bind[id] > 0)
-          AddUnique(fn[m_cfg.key_bind[id]], f);
-    AddUnique(fn[SDL_SCANCODE_ESCAPE], "Pausa del launcher");
-    AddUnique(fn[SDL_SCANCODE_F11], "Pantalla completa");
-    if (!m_cfg.hardcore)
-    {
-      AddUnique(fn[SDL_SCANCODE_F5], "Guardar partida");
-      AddUnique(fn[SDL_SCANCODE_F7], "Cargar partida");
-    }
-    static const std::vector<std::vector<KeyCap>> rows = {
-      {{SDL_SCANCODE_ESCAPE, 1, "Esc"}, {0, 0.6f, ""}, {SDL_SCANCODE_F1, 1, "F1"}, {SDL_SCANCODE_F2, 1, "F2"},
-       {SDL_SCANCODE_F3, 1, "F3"}, {SDL_SCANCODE_F4, 1, "F4"}, {0, 0.4f, ""}, {SDL_SCANCODE_F5, 1, "F5"},
-       {SDL_SCANCODE_F6, 1, "F6"}, {SDL_SCANCODE_F7, 1, "F7"}, {SDL_SCANCODE_F8, 1, "F8"}, {0, 0.4f, ""},
-       {SDL_SCANCODE_F9, 1, "F9"}, {SDL_SCANCODE_F10, 1, "F10"}, {SDL_SCANCODE_F11, 1, "F11"},
-       {SDL_SCANCODE_F12, 1, "F12"}},
-      {{SDL_SCANCODE_GRAVE, 1, "º"}, {SDL_SCANCODE_1, 1, "1"}, {SDL_SCANCODE_2, 1, "2"}, {SDL_SCANCODE_3, 1, "3"},
-       {SDL_SCANCODE_4, 1, "4"}, {SDL_SCANCODE_5, 1, "5"}, {SDL_SCANCODE_6, 1, "6"}, {SDL_SCANCODE_7, 1, "7"},
-       {SDL_SCANCODE_8, 1, "8"}, {SDL_SCANCODE_9, 1, "9"}, {SDL_SCANCODE_0, 1, "0"}, {SDL_SCANCODE_MINUS, 1, "'"},
-       {SDL_SCANCODE_EQUALS, 1, "¡"}, {SDL_SCANCODE_BACKSPACE, 2, "Retroceso"}},
-      {{SDL_SCANCODE_TAB, 1.5f, "Tab"}, {SDL_SCANCODE_Q, 1, "Q"}, {SDL_SCANCODE_W, 1, "W"}, {SDL_SCANCODE_E, 1, "E"},
-       {SDL_SCANCODE_R, 1, "R"}, {SDL_SCANCODE_T, 1, "T"}, {SDL_SCANCODE_Y, 1, "Y"}, {SDL_SCANCODE_U, 1, "U"},
-       {SDL_SCANCODE_I, 1, "I"}, {SDL_SCANCODE_O, 1, "O"}, {SDL_SCANCODE_P, 1, "P"}, {SDL_SCANCODE_LEFTBRACKET, 1, "`"},
-       {SDL_SCANCODE_RIGHTBRACKET, 1, "+"}, {SDL_SCANCODE_RETURN, 1.5f, "Enter"}},
-      {{SDL_SCANCODE_CAPSLOCK, 1.75f, "Bloq"}, {SDL_SCANCODE_A, 1, "A"}, {SDL_SCANCODE_S, 1, "S"},
-       {SDL_SCANCODE_D, 1, "D"}, {SDL_SCANCODE_F, 1, "F"}, {SDL_SCANCODE_G, 1, "G"}, {SDL_SCANCODE_H, 1, "H"},
-       {SDL_SCANCODE_J, 1, "J"}, {SDL_SCANCODE_K, 1, "K"}, {SDL_SCANCODE_L, 1, "L"}, {SDL_SCANCODE_SEMICOLON, 1, "Ñ"},
-       {SDL_SCANCODE_APOSTROPHE, 1, "´"}, {SDL_SCANCODE_BACKSLASH, 1, "Ç"}, {0, 1.25f, ""}},
-      {{SDL_SCANCODE_LSHIFT, 1.25f, "Mayús"}, {SDL_SCANCODE_NONUSBACKSLASH, 1, "<"}, {SDL_SCANCODE_Z, 1, "Z"},
-       {SDL_SCANCODE_X, 1, "X"}, {SDL_SCANCODE_C, 1, "C"}, {SDL_SCANCODE_V, 1, "V"}, {SDL_SCANCODE_B, 1, "B"},
-       {SDL_SCANCODE_N, 1, "N"}, {SDL_SCANCODE_M, 1, "M"}, {SDL_SCANCODE_COMMA, 1, ","}, {SDL_SCANCODE_PERIOD, 1, "."},
-       {SDL_SCANCODE_SLASH, 1, "-"}, {SDL_SCANCODE_RSHIFT, 2.75f, "Mayús"}},
-      {{SDL_SCANCODE_LCTRL, 1.5f, "Ctrl"}, {0, 1.0f, ""}, {SDL_SCANCODE_LALT, 1.5f, "Alt"},
-       {SDL_SCANCODE_SPACE, 6.0f, "Espacio"}, {SDL_SCANCODE_RALT, 1.5f, "Alt Gr"}, {0, 1.0f, ""},
-       {SDL_SCANCODE_RCTRL, 1.5f, "Ctrl"}},
-    };
-    const float unit = 66, gap = 6, kb_w = 15 * unit + 4.2f * unit, kb_x = px + (pw - kb_w) / 2;
-    const float kb_y = area_top + 30;
-    // Cada función lleva un número; las teclas con esa función, el mismo número (leyenda debajo).
-    std::vector<std::string> legend;          // texto de cada número
-    std::vector<std::vector<int>> legend_keys; // teclas de cada número
-    std::map<int, int> key_num;
-    auto number_of = [&](int sc) -> int {
-      const auto it = fn.find(sc);
-      if (it == fn.end())
-        return 0;
-      std::string t;
-      for (const std::string& f : it->second)
-        t += (t.empty() ? "" : " · ") + f;
-      for (size_t k = 0; k < legend.size(); k++)
-        if (legend[k] == t)
-        {
-          if (std::find(legend_keys[k].begin(), legend_keys[k].end(), sc) == legend_keys[k].end())
-            legend_keys[k].push_back(sc);
-          return static_cast<int>(k) + 1;
-        }
-      legend.push_back(t);
-      legend_keys.push_back({sc});
-      return static_cast<int>(legend.size());
-    };
-    auto key = [&](int sc, float x, float y, float w, const char* label) {
-      const int num = number_of(sc);
-      m_r.Rect(IX(x), IY(y), IS(w), IS(unit - gap), UiMode::Solid,
-               num ? Color{0.62f, 0.07f, 0.05f, 0.95f} : Color{0.12f, 0.11f, 0.11f, 0.92f});
-      m_r.Rect(IX(x), IY(y + unit - gap - 5), IS(w), IS(5), UiMode::Solid, {0, 0, 0, 0.35f});
-      m_r.Text(m_r.ui, label, IX(x + w / 2), IY(y + 16), IS(w > unit * 1.2f ? 18 : 22),
-               num ? Color{1, 0.95f, 0.9f, 1} : Color{0.6f, 0.58f, 0.56f, 1}, Align::Center);
-      if (num)
-      {
-        // Insignia con el número, en la esquina superior derecha.
-        m_r.Rect(IX(x + w - 22), IY(y + 3), IS(19), IS(19), UiMode::Solid, {0.95f, 0.78f, 0.35f, 1});
-        m_r.Text(m_r.ui, std::to_string(num), IX(x + w - 12.5f), IY(y + 3), IS(16), {0.12f, 0.05f, 0.03f, 1},
-                 Align::Center);
-      }
-    };
-    float y = kb_y;
-    for (size_t r = 0; r < rows.size(); r++)
-    {
-      float x = kb_x;
-      for (const KeyCap& k : rows[r])
-      {
-        const float w = k.w * unit - gap;
-        if (k.sc)
-          key(k.sc, x, y, w, k.label);
-        x += k.w * unit;
-      }
-      y += unit + (r == 0 ? 14 : 0);
-    }
-    // Flechas, a la derecha.
-    const float ax = kb_x + 15 * unit + 0.6f * unit, ay = kb_y + 14 + 4 * unit;
-    key(SDL_SCANCODE_UP, ax + unit, ay, unit - gap, "Arr");
-    key(SDL_SCANCODE_LEFT, ax, ay + unit, unit - gap, "Izq");
-    key(SDL_SCANCODE_DOWN, ax + unit, ay + unit, unit - gap, "Abj");
-    key(SDL_SCANCODE_RIGHT, ax + 2 * unit, ay + unit, unit - gap, "Der");
-
-    // Leyenda: número, función y teclas, en tres columnas.
-    const int cols = 3;
-    const int n = static_cast<int>(legend.size());
-    const int per = (n + cols - 1) / cols;
-    const float lx0 = kb_x, lw = kb_w / cols, ly0 = kb_y + 6 * unit + 50;
-    for (int k = 0; k < n; k++)
-    {
-      const float lx = lx0 + (k / per) * lw, ly = ly0 + (k % per) * 40;
-      m_r.Rect(IX(lx), IY(ly + 2), IS(24), IS(24), UiMode::Solid, {0.95f, 0.78f, 0.35f, 1});
-      m_r.Text(m_r.ui, std::to_string(k + 1), IX(lx + 12), IY(ly + 3), IS(19), {0.12f, 0.05f, 0.03f, 1},
-               Align::Center);
-      std::string keys;
-      for (int sc : legend_keys[k])
-        keys += (keys.empty() ? "" : " ") + KeyLabel(sc);
-      FitText(m_r.ui, legend[k], IX(lx + 36), IY(ly), IS(lw * 0.58f), IS(24), txt_c, Align::Left, false, 40000 + k);
-      FitText(m_r.ui, keys, IX(lx + 36 + lw * 0.6f), IY(ly + 3), IS(lw * 0.36f), IS(20), kDim, Align::Left, false,
-              40100 + k);
-    }
+    m_r.Text(m_r.ui, r.action, IX(c0), IY(y + 1), IS(28), kWhite);
+    DrawGlyph(r.b, IX(c1), IY(y), IS(40), PromptStyle::Keyboard);
+    DrawGlyph(r.b, IX(c2), IY(y), IS(40), PromptStyle::Xbox);
+    DrawGlyph(r.b, IX(c3), IY(y), IS(40), PromptStyle::PlayStation);
+    y += 54;
   }
-  else
-  {
-    // --- Mando ---
-    const bool xbox = view == 1;
-    const Texture& tex = xbox ? m_pad_xbox : m_pad_ps;
-    const float (*anchors)[2] = xbox ? kPadXboxAnchors : kPadPsAnchors;
-    const float iw = 760, ih = iw * kPadImageH / kPadImageW;
-    const float ix = px + (pw - iw) / 2, iy = area_top + (area_bot - area_top - ih) / 2 + 20;
-    const int parts = static_cast<int>(PadPart::Count);
-    std::vector<std::vector<std::string>> fn(parts);
-    AddUnique(fn[static_cast<int>(PadPart::LS)], "Moverse");
-    if (free_cam)
-      AddUnique(fn[static_cast<int>(PadPart::RS)], "Cámara libre");
-    for (int id = 0; id < kPsButtons; id++)
-      if (const char* f = PsFunction(id, free_cam))
-      {
-        const int part = PadPartOf(m_cfg.pad_bind[id]);
-        if (part >= 0)
-          AddUnique(fn[part], f);
-      }
-    AddUnique(fn[static_cast<int>(PadPart::GUIDE)], "Pausa del launcher");
-
-    const char* xb_names[] = {"A", "B", "X", "Y", "LB", "RB", "LT", "RT", "LS", "RS", "Cruceta", "Vista", "Menú", "Xbox"};
-    const char* ps_names[] = {"Cruz", "Círculo", "Cuadrado", "Triángulo", "L1", "R1", "L2", "R2", "L3", "R3", "Cruceta", "Select", "Start", "PS"};
-    struct Item
-    {
-      float ax, ay;
-      std::string name, text;
-    };
-    std::vector<Item> left, right;
-    for (int p = 0; p < parts; p++)
-    {
-      if (fn[p].empty())
-        continue;
-      std::string t;
-      for (const std::string& f : fn[p])
-        t += (t.empty() ? "" : " · ") + f;
-      const float axp = ix + anchors[p][0] * iw / kPadImageW, ayp = iy + anchors[p][1] * ih / kPadImageH;
-      (anchors[p][0] < kPadImageW / 2 ? left : right).push_back({axp, ayp, xbox ? xb_names[p] : ps_names[p], t});
-    }
-    // Etiquetas a la altura de su botón (separadas como mínimo `gap_y`); las líneas se dibujan
-    // antes que el mando, así sólo se ven fuera de él y en el botón queda un punto.
-    const float gap_y = 64;
-    auto layout = [&](std::vector<Item>& v, std::vector<float>& ly) {
-      std::sort(v.begin(), v.end(), [](const Item& a, const Item& b) { return a.ay < b.ay; });
-      const int n = static_cast<int>(v.size());
-      ly.assign(n, 0);
-      const float top = area_top + 30, bot = area_bot - 10;
-      for (int i = 0; i < n; i++)
-        ly[i] = std::max(v[i].ay, i ? ly[i - 1] + gap_y : top);
-      for (int i = n - 1; i >= 0; i--) // si se pasan por abajo, se suben
-        ly[i] = std::min(ly[i], i == n - 1 ? bot : ly[i + 1] - gap_y);
-    };
-    std::vector<float> lyl, lyr;
-    layout(left, lyl);
-    layout(right, lyr);
-    auto lines = [&](const std::vector<Item>& v, const std::vector<float>& ly, bool is_left) {
-      const int n = static_cast<int>(v.size());
-      for (int i = 0; i < n; i++)
-      {
-        // Del botón hacia fuera hasta una vertical propia de cada etiqueta, y de ahí a la etiqueta.
-        const float bus = is_left ? ix - 30 - 14 * i : ix + iw + 30 + 14 * (n - 1 - i);
-        const float lend = is_left ? px + 60 + 300 : px + pw - 60 - 300;
-        elbow(v[i].ax, v[i].ay, bus, ly[i], false);
-        m_r.Rect(IX(std::min(bus, lend)), IY(ly[i] - 1), IS(std::fabs(lend - bus)), IS(2), UiMode::Solid, line_c);
-      }
-    };
-    lines(left, lyl, true);
-    lines(right, lyr, false);
-    m_r.Sprite(tex, IX(ix), IY(iy), IS(iw), IS(ih), kWhite);
-    auto labels = [&](const std::vector<Item>& v, const std::vector<float>& ly, bool is_left) {
-      for (size_t i = 0; i < v.size(); i++)
-      {
-        // Punto en el borde exterior del botón (no tapa su símbolo).
-        const float dx = is_left ? -22.0f : 22.0f;
-        m_r.Rect(IX(v[i].ax + dx - 5), IY(v[i].ay - 5), IS(10), IS(10), UiMode::Solid, {1, 0.82f, 0.38f, 1});
-        const float lx = is_left ? px + 60 : px + pw - 60;
-        const Align al = is_left ? Align::Left : Align::Right;
-        m_r.Text(m_r.ui, v[i].name, IX(lx), IY(ly[i] - 30), IS(19), kGold, al);
-        FitText(m_r.ui, v[i].text, IX(is_left ? lx : lx - 300), IY(ly[i] + 4), IS(300), IS(23), txt_c, al, false,
-                41000 + (is_left ? 0 : 100) + static_cast<int>(i));
-      }
-    };
-    labels(left, lyl, true);
-    labels(right, lyr, false);
-  }
-
   m_r.Text(m_r.ui,
-           m_cfg.hardcore ? "Modo hardcore: sin guardar ni cargar partida"
-                          : "Las asignaciones se cambian en OPCIONES · Controles",
-           IX(px + 52), IY(py + ph - 64), IS(21), kDim);
+           m_cfg.hardcore ? "F11 pantalla completa  ·  modo hardcore: sin F5 / F7"
+                          : "F5 guardar · F7 cargar · F11 pantalla completa",
+           IX(c0), IY(y + 14), IS(22), kDim);
+  if (m_cfg.free_camera && !m_cfg.hardcore)
+    m_r.Text(m_r.ui, "Joystick derecho: cámara libre  ·  R3: cámara del juego  ·  L3: fijar enemigo", IX(c0), IY(y + 44),
+             IS(22), kDim);
   RenderHints({{PsButton::Back, "Volver"}}, IX(px + pw - 30), IY(py + ph - 64));
 }
 
@@ -4073,7 +3775,6 @@ int App::Run(int argc, char** argv)
           else if (b == "r2") id = RETRO_DEVICE_ID_JOYPAD_R2;
           else if (b == "r3") id = RETRO_DEVICE_ID_JOYPAD_R3;
           else if (b == "l3") id = RETRO_DEVICE_ID_JOYPAD_L3;
-          else if (b == "select") id = RETRO_DEVICE_ID_JOYPAD_SELECT;
           script.push_back({std::atof(item.substr(0, c).c_str()), id, hold});
         }
       }
