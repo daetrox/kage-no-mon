@@ -52,7 +52,12 @@ constexpr float kProbeClear = 0.85f; // visible si el juego deja la cámara a �
 constexpr float kProjH = 300.0f, kScreenHalfW = 160.0f, kScreenHalfH = 128.0f;
 // El centro de proyección queda 21 líneas por debajo del centro de la imagen visible (medido).
 constexpr float kScreenOffsetY = 21.0f;
-constexpr float kMarkAbove = 1650.0f; // coronilla del personaje (la marca se dibuja un poco más arriba)
+constexpr float kMarkAbove = 1650.0f; // coronilla si no hay huesos fiables (la marca va un poco más arriba)
+// Huesos del personaje: 15 posiciones en el mundo desde +0x204, cada 0x58 bytes; el 2 es la cabeza.
+// La marca va por encima de la coronilla: unas 350 unidades sobre ese hueso (más el casco, si lo hay).
+constexpr uint32_t kBones = 0x204, kBoneStride = 0x58;
+constexpr int kHeadBone = 2;
+constexpr float kAboveHeadBone = 420.0f;
 
 // Modos de cámara del juego que siguen al personaje: 0 quieto, 2 girando en el sitio, 3 andando o
 // corriendo, 4 agachado. Con los demás (6 mirar con L1, 20 apuntar, nadar, cinemáticas…) manda el juego.
@@ -287,7 +292,24 @@ bool FreeCamera::LockMarker(const uint8_t* ram, size_t size, float* sx, float* s
   int32_t t[3];
   std::memcpy(m, ram + m_cam_matrix, sizeof(m));
   std::memcpy(t, ram + m_cam_matrix + 0x14, sizeof(t));
-  const float v[3] = {static_cast<float>(p[0]), static_cast<float>(p[1]) - kMarkAbove, static_cast<float>(p[2])};
+  float v[3] = {static_cast<float>(p[0]), static_cast<float>(p[1]) - kMarkAbove, static_cast<float>(p[2])};
+  // Mejor sobre el hueso de la cabeza (sigue la estatura y la postura reales), si es coherente con la
+  // posición del personaje.
+  const uint32_t obj = debug_player ? (Get32(ram, m_player) & 0x1FFFFF) : m_lock_obj;
+  const uint32_t head = obj + kBones + kHeadBone * kBoneStride;
+  if (obj && head + 12 <= size)
+  {
+    int32_t h[3];
+    std::memcpy(h, ram + head, sizeof(h));
+    const float dx = static_cast<float>(h[0] - p[0]), dz = static_cast<float>(h[2] - p[2]);
+    const float up = static_cast<float>(p[1] - h[1]);
+    if (dx * dx + dz * dz < 1500.0f * 1500.0f && up > 300.0f && up < 3000.0f)
+    {
+      v[0] = static_cast<float>(h[0]);
+      v[1] = static_cast<float>(h[1]) - kAboveHeadBone;
+      v[2] = static_cast<float>(h[2]);
+    }
+  }
   float c[3];
   for (int i = 0; i < 3; i++)
     c[i] = (m[i * 3] * v[0] + m[i * 3 + 1] * v[1] + m[i * 3 + 2] * v[2]) / 4096.0f + t[i];
