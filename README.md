@@ -58,7 +58,8 @@ ni mensajes extraños.
 | 🎥 **Cámara libre** | Gira la cámara alrededor del personaje con el joystick derecho, con la colisión con muros del propio juego; R3 la devuelve detrás (no disponible en hardcore). |
 | 💀 **Modo hardcore** | Como en la consola: BIOS original, sin estados guardados ni trucos. Los logros conseguidos así se marcan como hardcore. |
 | 🥷 **Trucos** | Vida infinita, todas las misiones, objetos infinitos… Se activan en *Opciones › Trucos* (los logros se pausan mientras haya trucos). |
-| 🇪🇸 **Logros en español** | Las descripciones se traducen en tu equipo, con los nombres oficiales de las misiones. |
+| 🇪🇸🇺🇸 **Español e inglés** | Cambia el idioma del launcher con la bandera de arriba a la derecha (la primera vez se elige según el idioma del sistema). |
+| 🇪🇸 **Logros en español** | En español, las descripciones se traducen en tu equipo, con los nombres oficiales de las misiones. |
 | 📜 **Créditos** | Todas las personas y proyectos que hacen posible el launcher, con sus licencias. |
 | 💾 **Guardado rápido** | Al salir se guarda tu partida y la retomas con **CONTINUAR**. |
 | 📦 **Un solo archivo** | AppImage: funciona en casi cualquier distribución de Linux sin instalar nada. |

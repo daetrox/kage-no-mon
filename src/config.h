@@ -47,6 +47,7 @@ struct Config
   int camera_speed = 100;
   bool modern_controls = true;   // movimiento 360° relativo a la cámara (si no, el de tanque original)        // velocidad de la cámara libre, 20..300 %      // cambiar también los iconos de botones dentro del juego
   std::string prompt_style = "auto"; // iconos de botones: auto, keyboard, xbox, playstation
+  std::string language;              // "es" o "en"; vacío = según el idioma del sistema
 
   void Load();
   void Save() const;

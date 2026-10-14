@@ -1,4 +1,5 @@
 #include "renderer.h"
+#include "i18n.h"
 #include "platform.h"
 
 #include <SDL.h>
@@ -57,7 +58,7 @@ GLuint Renderer::Compile(const std::string& vs_path, const std::string& fs_path,
   if (!ReadFile(vs_path, &vs_src) || !ReadFile(fs_path, &fs_src) ||
       !ReadFile(m_assets + "/shaders/common.glsl", &common))
   {
-    *error = "No se encuentran los shaders en " + m_assets + "/shaders";
+    *error = L("No se encuentran los shaders en ", "Shaders not found in ") + m_assets + "/shaders";
     return 0;
   }
   // Inserta las funciones comunes (ruido, etc.) tras la línea #version.
@@ -75,7 +76,7 @@ GLuint Renderer::Compile(const std::string& vs_path, const std::string& fs_path,
     {
       char log[4096];
       glGetShaderInfoLog(sh, sizeof(log), nullptr, log);
-      *error = "Error compilando " + name + ":\n" + log;
+      *error = L("Error compilando ", "Error compiling ") + name + ":\n" + log;
       glDeleteShader(sh);
       return 0;
     }
@@ -103,7 +104,7 @@ GLuint Renderer::Compile(const std::string& vs_path, const std::string& fs_path,
   {
     char log[4096];
     glGetProgramInfoLog(prog, sizeof(log), nullptr, log);
-    *error = std::string("Error enlazando shader:\n") + log;
+    *error = std::string(L("Error enlazando shader:\n", "Error linking shader:\n")) + log;
     glDeleteProgram(prog);
     return 0;
   }
@@ -147,7 +148,7 @@ bool Renderer::LoadFont(Font& font, const std::string& path, float size, const s
   std::string data;
   if (!ReadFile(path, &data))
   {
-    *error = "No se encuentra la fuente " + path;
+    *error = L("No se encuentra la fuente ", "Font not found: ") + path;
     return false;
   }
   const auto* bytes = reinterpret_cast<const unsigned char*>(data.data());

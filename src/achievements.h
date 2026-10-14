@@ -4,6 +4,7 @@
 // Después todo es local: rcheevos evalúa la lógica de cada logro leyendo la RAM emulada en
 // cada frame, y los desbloqueos se guardan en disco (no se envían a RetroAchievements).
 #pragma once
+#include "i18n.h"
 #include "renderer.h"
 
 #include <atomic>
@@ -15,8 +16,12 @@
 struct Achievement
 {
   uint32_t id = 0;
-  std::string title;
+  std::string title;       // traducido al español
   std::string description;
+  std::string title_en;    // original de RetroAchievements (inglés)
+  std::string description_en;
+  const std::string& Title() const { return LangEn() ? title_en : title; }
+  const std::string& Description() const { return LangEn() ? description_en : description; }
   std::string badge;   // nombre de la insignia en RA
   std::string memaddr; // lógica del logro (formato rcheevos)
   std::string author;  // autor del logro en RetroAchievements

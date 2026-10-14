@@ -187,3 +187,24 @@ fire = cv2.GaussianBlur(fire, (0, 0), 3)
 fire = np.clip(fire * 1.6, 0, 1)
 cv2.imwrite(os.path.join(OUT, "fire_mask.png"), (fire * 255).astype(np.uint8))
 print("Recursos generados en", os.path.abspath(OUT))
+
+# --- Lema en inglés: el mismo sello y la misma pincelada, con el texto escrito en Kaushan Script ---
+from PIL import Image, ImageDraw, ImageFont
+
+tag = Image.open(os.path.join(OUT, "tagline.png")).convert("RGBA")
+px = np.array(tag)
+tw, th = tag.size
+for x in range(85, tw):
+    # se borra el texto en español por encima de la pincelada (que baja hacia la izquierda)
+    line_y = int(97 - (x - 55) * 20 / 308) - 5
+    px[:line_y, x, 3] = 0
+tag = Image.fromarray(px)
+font = ImageFont.truetype(os.path.join(HERE, "..", "assets", "fonts", "KaushanScript-Regular.ttf"), 25)
+text = Image.new("RGBA", (tw * 2, th * 2), (0, 0, 0, 0))
+draw = ImageDraw.Draw(text)
+ink = (205, 200, 195, 235)
+draw.text((tw - 125, th - 64), "Live with honor,", font=font, fill=ink)
+draw.text((tw - 105, th - 34), "Kill with stealth", font=font, fill=ink)
+text = text.rotate(4, resample=Image.BICUBIC, center=(tw, th))
+tag.alpha_composite(text.crop((tw // 2 - 20, th // 2, tw // 2 - 20 + tw, th // 2 + th)))
+tag.save(os.path.join(OUT, "tagline_en.png"))

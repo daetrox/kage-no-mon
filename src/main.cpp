@@ -9,6 +9,7 @@
 #include "cheats.h"
 #include "free_camera.h"
 #include "game_buttons.h"
+#include "i18n.h"
 #include "platform.h"
 #include "config.h"
 #include "emulator.h"
@@ -187,7 +188,7 @@ public:
       std::string cmd;
       if (std::system("command -v zenity >/dev/null 2>&1") == 0)
         cmd = "zenity --file-selection --title=\"" + title + "\" --file-filter=\"" + title + " | " + patterns +
-              "\" --file-filter=\"Todos | *\" 2>/dev/null";
+              "\" --file-filter=\"" + L("Todos", "All files") + " | *\" 2>/dev/null";
       else
         cmd = "kdialog --getopenfilename \"$HOME\" \"" + patterns + "\" --title \"" + title + "\" 2>/dev/null";
       std::string result;
@@ -350,15 +351,28 @@ constexpr int kPauseItems = 6;
 // Opciones: lista de categorías (página -1) y sus páginas (0..3).
 constexpr int kOptCategoryCount = 5;
 constexpr int kCheatsCategory = 4; // abre la pantalla de trucos en lugar de una página de filas
-const char* const kOptCategories[kOptCategoryCount] = {"ISO Y BIOS", "GRÁFICOS", "SONIDO", "CONTROLES", "TRUCOS"};
+const char* OptCategory(int i)
+{
+  static const char* const es[kOptCategoryCount] = {"ISO Y BIOS", "GRÁFICOS", "SONIDO", L("CONTROLES", "CONTROLS"), L("TRUCOS", "CHEATS")};
+  static const char* const en[kOptCategoryCount] = {"ISO & BIOS", "GRAPHICS", "SOUND", "CONTROLS", "CHEATS"};
+  return LangEn() ? en[i] : es[i];
+}
 const char* const kOptKanji[kOptCategoryCount] = {"盤", "絵", "音", "操", "術"};
-const char* const kOptCategoryHelp[kOptCategoryCount] = {
-  "Imagen del disco, BIOS de la consola, arranque y modo hardcore.",
-  "Resolución, filtros, aspecto de la pantalla y pantalla completa.",
-  "Volumen del juego, de la música y de los efectos.",
-  "Iconos de botones, personalización y esquema de controles.",
-  "Vida infinita, misiones desbloqueadas y más. Mientras haya trucos activos, los logros se pausan.",
-};
+const char* OptCategoryHelp(int i)
+{
+  switch (i)
+  {
+    case 0: return L("Imagen del disco, BIOS de la consola, arranque y modo hardcore.",
+                     "Disc image, console BIOS, boot and hardcore mode.");
+    case 1: return L("Resolución, filtros, aspecto de la pantalla y pantalla completa.",
+                     "Resolution, filters, aspect ratio and fullscreen.");
+    case 2: return L("Volumen del juego, de la música y de los efectos.", "Game, music and sound effects volume.");
+    case 3: return L("Iconos de botones, personalización y esquema de controles.",
+                     "Button icons, remapping and controls layout.");
+    default: return L("Vida infinita, misiones desbloqueadas y más. Mientras haya trucos activos, los logros se pausan.",
+                      "Infinite health, unlocked missions and more. While cheats are active, achievements are paused.");
+  }
+}
 
 const std::vector<int>& OptPageRows(int page)
 {
@@ -377,7 +391,8 @@ const std::vector<int>& OptPageRows(int page)
 std::string BiosLabel(const std::string& file)
 {
   static std::map<std::string, std::string> cache;
-  auto it = cache.find(file);
+  const std::string key = (LangEn() ? "en:" : "es:") + file;
+  auto it = cache.find(key);
   if (it != cache.end())
     return it->second;
   static const std::pair<const char*, const char*> known[] = {
@@ -408,8 +423,12 @@ std::string BiosLabel(const std::string& file)
     for (const auto& [h, name] : known)
       if (std::strcmp(h, hex) == 0)
         label = std::string(name) + "  (" + file + ")";
+    if (LangEn())
+      for (const auto& [from, to] : {std::pair{"Japón", "Japan"}, std::pair{"EE. UU.", "USA"}, std::pair{"Europa", "Europe"}})
+        if (const size_t at = label.find(from); at != std::string::npos)
+          label.replace(at, std::strlen(from), to);
   }
-  cache[file] = label;
+  cache[key] = label;
   return label;
 }
 
@@ -427,14 +446,14 @@ const char* PsButtonName(int retro_id)
 {
   switch (retro_id)
   {
-    case RETRO_DEVICE_ID_JOYPAD_UP: return "Arriba";
-    case RETRO_DEVICE_ID_JOYPAD_DOWN: return "Abajo";
-    case RETRO_DEVICE_ID_JOYPAD_LEFT: return "Izquierda";
-    case RETRO_DEVICE_ID_JOYPAD_RIGHT: return "Derecha";
-    case RETRO_DEVICE_ID_JOYPAD_B: return "Cruz";
-    case RETRO_DEVICE_ID_JOYPAD_A: return "Círculo";
-    case RETRO_DEVICE_ID_JOYPAD_Y: return "Cuadrado";
-    case RETRO_DEVICE_ID_JOYPAD_X: return "Triángulo";
+    case RETRO_DEVICE_ID_JOYPAD_UP: return L("Arriba", "Up");
+    case RETRO_DEVICE_ID_JOYPAD_DOWN: return L("Abajo", "Down");
+    case RETRO_DEVICE_ID_JOYPAD_LEFT: return L("Izquierda", "Left");
+    case RETRO_DEVICE_ID_JOYPAD_RIGHT: return L("Derecha", "Right");
+    case RETRO_DEVICE_ID_JOYPAD_B: return L("Cruz", "Cross");
+    case RETRO_DEVICE_ID_JOYPAD_A: return L("Círculo", "Circle");
+    case RETRO_DEVICE_ID_JOYPAD_Y: return L("Cuadrado", "Square");
+    case RETRO_DEVICE_ID_JOYPAD_X: return L("Triángulo", "Triangle");
     case RETRO_DEVICE_ID_JOYPAD_L: return "L1";
     case RETRO_DEVICE_ID_JOYPAD_R: return "R1";
     case RETRO_DEVICE_ID_JOYPAD_L2: return "L2";
@@ -459,32 +478,32 @@ std::string KeyLabel(int scancode)
     return "—";
   switch (scancode)
   {
-    case kMouseLeft: return "Clic izq.";
-    case kMouseRight: return "Clic der.";
-    case kMouseMiddle: return "Clic central";
-    case kWheelUp: return "Rueda arriba";
-    case kWheelDown: return "Rueda abajo";
+    case kMouseLeft: return L("Clic izq.", "Left click");
+    case kMouseRight: return L("Clic der.", "Right click");
+    case kMouseMiddle: return L("Clic central", "Middle click");
+    case kWheelUp: return L("Rueda arriba", "Wheel up");
+    case kWheelDown: return L("Rueda abajo", "Wheel down");
     default: break;
   }
   const auto sc = static_cast<SDL_Scancode>(scancode);
   switch (sc)
   {
     case SDL_SCANCODE_RETURN: return "Enter";
-    case SDL_SCANCODE_KP_ENTER: return "Enter (num.)";
-    case SDL_SCANCODE_BACKSPACE: return "Retroceso";
-    case SDL_SCANCODE_SPACE: return "Espacio";
+    case SDL_SCANCODE_KP_ENTER: return L("Enter (num.)", "Enter (keypad)");
+    case SDL_SCANCODE_BACKSPACE: return L("Retroceso", "Backspace");
+    case SDL_SCANCODE_SPACE: return L("Espacio", "Space");
     case SDL_SCANCODE_TAB: return "Tab";
-    case SDL_SCANCODE_UP: return "Arriba";
-    case SDL_SCANCODE_DOWN: return "Abajo";
-    case SDL_SCANCODE_LEFT: return "Izquierda";
-    case SDL_SCANCODE_RIGHT: return "Derecha";
-    case SDL_SCANCODE_LSHIFT: return "Mayús izq.";
-    case SDL_SCANCODE_RSHIFT: return "Mayús der.";
-    case SDL_SCANCODE_LCTRL: return "Ctrl izq.";
-    case SDL_SCANCODE_RCTRL: return "Ctrl der.";
+    case SDL_SCANCODE_UP: return L("Arriba", "Up");
+    case SDL_SCANCODE_DOWN: return L("Abajo", "Down");
+    case SDL_SCANCODE_LEFT: return L("Izquierda", "Left");
+    case SDL_SCANCODE_RIGHT: return L("Derecha", "Right");
+    case SDL_SCANCODE_LSHIFT: return L("Mayús izq.", "Left Shift");
+    case SDL_SCANCODE_RSHIFT: return L("Mayús der.", "Right Shift");
+    case SDL_SCANCODE_LCTRL: return L("Ctrl izq.", "Left Ctrl");
+    case SDL_SCANCODE_RCTRL: return L("Ctrl der.", "Right Ctrl");
     case SDL_SCANCODE_LALT: return "Alt";
     case SDL_SCANCODE_RALT: return "Alt Gr";
-    case SDL_SCANCODE_CAPSLOCK: return "Bloq Mayús";
+    case SDL_SCANCODE_CAPSLOCK: return L("Bloq Mayús", "Caps Lock");
     default: break;
   }
   const char* name = SDL_GetScancodeName(sc);
@@ -508,6 +527,10 @@ private:
   // Dibujo
   void Layout();
   void RenderTitleBar();
+  // Selector de idioma (arriba a la derecha): bandera del idioma actual y menú con los dos.
+  void RenderLanguage();
+  void DrawFlag(Lang lang, float x, float y, float w, float h, float alpha);
+  void SetLanguage(Lang lang);
   void RenderMenu();
   void RenderOptions();
   void RenderOptionCategories();
@@ -531,8 +554,9 @@ private:
   void RenderHints(const std::vector<std::pair<PsButton, std::string>>& hints, float right_x, float y);
   float DrawGlyph(PsButton b, float x, float y, float h, PromptStyle style, bool draw = true);
   float DrawGlyph(PsButton b, float x, float y, float h) { return DrawGlyph(b, x, y, h, CurrentStyle()); }
+  // `reserve`: ancho (px de la ilustración) que se deja libre a la derecha de la etiqueta.
   void DrawMenuButton(const Rect& slot, const std::string& label, const Texture* icon, float sel, float font,
-                      bool own_background, float alpha = 1.0f, float dx = 0.0f);
+                      bool own_background, float alpha = 1.0f, float dx = 0.0f, float reserve = 0.0f);
   void Panel(float x, float y, float w, float h);
   void DimScreen(float a);
   std::vector<std::string> Wrap(const Font& f, const std::string& text, float size, float max_w);
@@ -587,7 +611,7 @@ private:
     if (!m_hardcore_session)
       return false;
     m_audio.Play(Sfx::Cancel);
-    Toast("No disponible en modo hardcore");
+    Toast(L("No disponible en modo hardcore", "Not available in hardcore mode"));
     return true;
   }
   void StartLogin();
@@ -644,7 +668,7 @@ private:
 
   Texture m_bg, m_fire, m_btn_sel, m_btn_normal;
   Texture m_ic_play, m_ic_ach, m_ic_opt, m_ic_quit;
-  Texture m_logo, m_tagline;
+  Texture m_logo, m_tagline, m_tagline_en;
 
   Screen m_screen = Screen::Menu;
   Modal m_modal = Modal::None;
@@ -707,6 +731,8 @@ private:
   float m_marquee_start = 0;
 
   Rect m_tb_min, m_tb_max, m_tb_close;
+  Rect m_tb_lang, m_lang_menu; // botón del idioma y su menú desplegable
+  bool m_lang_open = false;
 
   SDL_GameController* m_pad = nullptr;
   PromptStyle m_last_device = PromptStyle::Keyboard;
@@ -755,13 +781,13 @@ bool App::Init(std::string* error)
   m_gl = SDL_GL_CreateContext(m_window);
   if (!m_gl)
   {
-    *error = std::string("OpenGL 3.3 no disponible: ") + SDL_GetError();
+    *error = std::string(L("OpenGL 3.3 no disponible: ", "OpenGL 3.3 not available: ")) + SDL_GetError();
     return false;
   }
   SDL_GL_MakeCurrent(m_window, m_gl);
   if (!LoadGLFunctions())
   {
-    *error = "Faltan funciones de OpenGL 3.3";
+    *error = L("Faltan funciones de OpenGL 3.3", "OpenGL 3.3 functions are missing");
     return false;
   }
   SDL_GL_SetSwapInterval(1);
@@ -774,6 +800,7 @@ bool App::Init(std::string* error)
   bool ok = m_r.LoadTexture(ui + "background_clean.jpg", &m_bg, true);
   ok &= m_r.LoadTexture(ui + "logo.png", &m_logo, true);
   ok &= m_r.LoadTexture(ui + "tagline.png", &m_tagline, true);
+  ok &= m_r.LoadTexture(ui + "tagline_en.png", &m_tagline_en, true);
   ok &= m_r.LoadTexture(ui + "fire_mask.png", &m_fire, true);
   ok &= m_r.LoadTexture(ui + "btn_selected.png", &m_btn_sel, false);
   ok &= m_r.LoadTexture(ui + "btn_normal.png", &m_btn_normal, false);
@@ -783,7 +810,7 @@ bool App::Init(std::string* error)
   ok &= m_r.LoadTexture(ui + "icon_quit.png", &m_ic_quit, true);
   if (!ok)
   {
-    *error = "Faltan imágenes de la interfaz en " + ui;
+    *error = L("Faltan imágenes de la interfaz en ", "Interface images missing in ") + ui;
     return false;
   }
 
@@ -881,7 +908,8 @@ SDL_HitTestResult App::HitTest(SDL_Window* win, const SDL_Point* pt, void* data)
   const float px = pt->x * static_cast<float>(dw) / w, py = pt->y * static_cast<float>(dh) / h;
   if (app->m_screen != Screen::Game && py < app->IS(kTitleH))
   {
-    if (app->m_tb_min.Contains(px, py) || app->m_tb_max.Contains(px, py) || app->m_tb_close.Contains(px, py))
+    if (app->m_tb_min.Contains(px, py) || app->m_tb_max.Contains(px, py) || app->m_tb_close.Contains(px, py) ||
+        app->m_tb_lang.Contains(px, py))
       return SDL_HITTEST_NORMAL;
     return SDL_HITTEST_DRAGGABLE;
   }
@@ -945,16 +973,20 @@ void App::StartGame(bool resume)
   m_modal = Modal::None;
   if (m_cfg.game_path.empty() || !Paths::FileExists(m_cfg.game_path))
   {
-    ShowDialog("No hay ninguna imagen de disco seleccionada.\n\nCópiala en la carpeta game/ del launcher,\n"
-               "elígela en OPCIONES · ISO y BIOS,\no arrástrala sobre la ventana.");
+    ShowDialog(L("No hay ninguna imagen de disco seleccionada.\n\nCópiala en la carpeta game/ del launcher,\n"
+                 "elígela en OPCIONES · ISO y BIOS,\no arrástrala sobre la ventana.",
+                 "No disc image selected.\n\nCopy it into the launcher's game/ folder,\n"
+                 "choose it in OPTIONS · ISO & BIOS,\nor drag it onto the window."));
     return;
   }
 
   // Hardcore: sólo con la BIOS original de la consola y siempre desde el arranque.
   if (m_cfg.hardcore && !HasSonyBios())
   {
-    ShowDialog("El modo hardcore funciona sólo con la BIOS original de tu PlayStation.\n\nCárgala en OPCIONES · "
-               "ISO y BIOS, o desactiva allí el modo hardcore.");
+    ShowDialog(L("El modo hardcore funciona sólo con la BIOS original de tu PlayStation.\n\nCárgala en OPCIONES · "
+                 "ISO y BIOS, o desactiva allí el modo hardcore.",
+                 "Hardcore mode only works with your PlayStation's original BIOS.\n\nLoad it in OPTIONS · "
+                 "ISO & BIOS, or turn hardcore mode off there."));
     return;
   }
   m_hardcore_session = m_cfg.hardcore;
@@ -991,19 +1023,19 @@ void App::StartGame(bool resume)
   }
   m_emu.SetRumbleTarget(m_pad);
   if (resume && !m_emu.LoadState(StatePath()))
-    Toast("No se pudo cargar la partida guardada");
+    Toast(L("No se pudo cargar la partida guardada", "Could not load the saved game"));
 
   // Logros: se evalúan tras cada frame emulado leyendo la RAM (en pausa si hay trucos activos).
   if (m_cheats_active)
   {
     m_ach.EndSession();
-    Toast("Trucos activos: los logros están en pausa");
+    Toast(L("Trucos activos: los logros están en pausa", "Cheats active: achievements are paused"));
   }
   else
   {
     m_ach.BeginSession(m_hardcore_session);
     if (m_hardcore_session)
-      Toast("Modo hardcore: sin estados guardados ni trucos");
+      Toast(L("Modo hardcore: sin estados guardados ni trucos", "Hardcore mode: no save states or cheats"));
   }
   m_emu.on_frame = [this]() {
     size_t n = 0;
@@ -1107,7 +1139,7 @@ void App::ActivatePause(int index)
     case 1:
       if (StatesBlocked())
         break;
-      Toast(SaveStateNow() ? "Partida guardada" : "No se pudo guardar la partida");
+      Toast(SaveStateNow() ? L("Partida guardada", "Game saved") : L("No se pudo guardar la partida", "Could not save the game"));
       resume();
       break;
     case 2:
@@ -1117,11 +1149,11 @@ void App::ActivatePause(int index)
       {
         if (!m_cheats_active)
           m_ach.BeginSession(false); // reinicia la evaluación tras cambiar la memoria
-        Toast("Partida cargada");
+        Toast(L("Partida cargada", "Game loaded"));
       }
       else
       {
-        Toast("No hay partida guardada");
+        Toast(L("No hay partida guardada", "No saved game"));
       }
       resume();
       break;
@@ -1165,11 +1197,11 @@ void App::ImportBios(const std::string& path)
     // La BIOS recién cargada queda elegida.
     m_cfg.bios_file = name;
     m_cfg.Save();
-    Toast("BIOS añadida: " + name);
+    Toast(L("BIOS añadida: ", "BIOS added: ") + name);
   }
   else
   {
-    Toast("No se pudo copiar la BIOS");
+    Toast(L("No se pudo copiar la BIOS", "Could not copy the BIOS"));
   }
 }
 
@@ -1177,7 +1209,7 @@ void App::StartLogin()
 {
   if (m_login_user.empty() || m_login_pass.empty())
   {
-    Toast("Escribe tu usuario y contraseña de RetroAchievements");
+    Toast(L("Escribe tu usuario y contraseña de RetroAchievements", "Enter your RetroAchievements username and password"));
     return;
   }
   m_audio.Play(Sfx::Select);
@@ -1263,10 +1295,10 @@ void App::OptionChange(int row, int dir)
         return;
       if (!FilePicker::Available())
       {
-        ShowDialog("No se encontró zenity ni kdialog.\nArrastra la imagen del disco sobre la ventana.");
+        ShowDialog(L("No se encontró zenity ni kdialog.\nArrastra la imagen del disco sobre la ventana.", "Neither zenity nor kdialog was found.\nDrag the disc image onto the window."));
         return;
       }
-      m_picker.Open("Imagen del disco", "*.cue *.CUE *.chd *.CHD *.bin *.BIN *.iso *.img *.pbp *.m3u",
+      m_picker.Open(L("Imagen del disco", "Disc image"), "*.cue *.CUE *.chd *.CHD *.bin *.BIN *.iso *.img *.pbp *.m3u",
                     [this](const std::string& p) { SetGamePath(p); });
       return;
     case OPT_BIOS: CycleBios(dir); break;
@@ -1275,10 +1307,10 @@ void App::OptionChange(int row, int dir)
         return;
       if (!FilePicker::Available())
       {
-        ShowDialog("No se encontró zenity ni kdialog.\nArrastra el archivo de la BIOS (512 KB) sobre la ventana.");
+        ShowDialog(L("No se encontró zenity ni kdialog.\nArrastra el archivo de la BIOS (512 KB) sobre la ventana.", "Neither zenity nor kdialog was found.\nDrag the BIOS file (512 KB) onto the window."));
         return;
       }
-      m_picker.Open("BIOS de PlayStation", "*.bin *.BIN *.rom *.ROM", [this](const std::string& p) { ImportBios(p); });
+      m_picker.Open(L("BIOS de PlayStation", "PlayStation BIOS"), "*.bin *.BIN *.rom *.ROM", [this](const std::string& p) { ImportBios(p); });
       return;
     case OPT_RENDERER: m_cfg.hardware_renderer = !m_cfg.hardware_renderer; break;
     case OPT_SCALE:
@@ -1340,8 +1372,10 @@ void App::OptionChange(int row, int dir)
     case OPT_HARDCORE:
       m_cfg.hardcore = !m_cfg.hardcore;
       if (m_cfg.hardcore && !HasSonyBios())
-        ShowDialog("Modo hardcore activado.\n\nNecesita la BIOS original de tu PlayStation: cárgala con "
-                   "«Cargar BIOS nueva…» y elígela en la fila BIOS.");
+        ShowDialog(L("Modo hardcore activado.\n\nNecesita la BIOS original de tu PlayStation: cárgala con "
+                     "«Cargar BIOS nueva…» y elígela en la fila BIOS.",
+                     "Hardcore mode enabled.\n\nIt needs your PlayStation's original BIOS: load it with "
+                     "“Load new BIOS…” and choose it in the BIOS row."));
       break;
     case OPT_GAME_PROMPTS: m_cfg.game_prompts = !m_cfg.game_prompts; break;
     case OPT_FREE_CAMERA: m_cfg.free_camera = !m_cfg.free_camera; break;
@@ -1384,7 +1418,7 @@ void App::OptionChange(int row, int dir)
         m_cfg.DefaultKeyboard();
         m_cfg.DefaultPad();
         m_reset_confirm = 0;
-        Toast("Controles restaurados por defecto");
+        Toast(L("Controles restaurados por defecto", "Controls restored to defaults"));
         break;
       }
       m_reset_confirm = 3.0f;
@@ -1451,7 +1485,7 @@ void App::NavigateImpl(int dy, int dx)
     case Screen::Credits: m_credits_target += dy * 120.0f; break;
     case Screen::Cheats:
     {
-      // Filas: los trucos, "Desactivar todos" y "Volver".
+      // Filas: los trucos, L("Desactivar todos", "Disable all") y "Volver".
       const int n = static_cast<int>(m_cheat_list.size()) + 2;
       if (dy)
         m_cheat_sel = (m_cheat_sel + dy + n) % n;
@@ -1476,7 +1510,7 @@ void App::NavigateImpl(int dy, int dx)
       }
       else if (m_ach.GetState() == Achievements::State::Ready && dy)
       {
-        // La última fila (índice n) es "Reiniciar mis logros".
+        // La última fila (índice n) es L("Reiniciar mis logros", "Reset my achievements").
         const int n = static_cast<int>(m_ach.List().size());
         m_ach_sel = std::clamp(m_ach_sel + dy, 0, n);
       }
@@ -1524,7 +1558,7 @@ void App::Accept()
     {
       m_ach.ResetUnlocks();
       m_audio.Play(Sfx::Close);
-      Toast("Logros reiniciados");
+      Toast(L("Logros reiniciados", "Achievements reset"));
     }
     else
     {
@@ -1592,7 +1626,7 @@ void App::Accept()
         m_cfg.cheats.clear();
         m_cfg.Save();
         m_audio.Play(Sfx::Cancel);
-        Toast("Trucos desactivados");
+        Toast(L("Trucos desactivados", "Cheats disabled"));
       }
       else
       {
@@ -1615,7 +1649,7 @@ void App::Accept()
         else
           m_cfg.DefaultPad();
         m_cfg.Save();
-        Toast(m_remap_device == 0 ? "Teclado restaurado por defecto" : "Mando restaurado por defecto");
+        Toast(m_remap_device == 0 ? L("Teclado restaurado por defecto", "Keyboard restored to defaults") : L("Mando restaurado por defecto", "Controller restored to defaults"));
       }
       else
       {
@@ -1640,7 +1674,8 @@ void App::AssignBinding(int retro_id, int value)
     if (i != retro_id && table[i] == value)
     {
       table[i] = old;
-      Toast(std::string(PsButtonName(i)) + " pasa a la asignación anterior de " + PsButtonName(retro_id));
+      Toast(LangEn() ? std::string(PsButtonName(i)) + " takes the previous binding of " + PsButtonName(retro_id)
+                     : std::string(PsButtonName(i)) + " pasa a la asignación anterior de " + PsButtonName(retro_id));
     }
   table[retro_id] = value;
   m_cfg.Save();
@@ -1653,6 +1688,11 @@ void App::Back()
   // Abrir la pausa suena como "elegir"; todo lo demás, como "cancelar".
   const bool opening_pause = m_screen == Screen::Game && !m_paused && m_modal == Modal::None;
   m_audio.Play(opening_pause ? Sfx::Select : Sfx::Cancel);
+  if (m_lang_open)
+  {
+    m_lang_open = false;
+    return;
+  }
   if (m_modal != Modal::None)
   {
     m_modal = Modal::None;
@@ -1823,7 +1863,7 @@ void App::HandleEvent(const SDL_Event& e)
       else if (m_remap_device == 0)
       {
         if (IsReservedKey(sc))
-          Toast("Esa tecla está reservada por el launcher");
+          Toast(L("Esa tecla está reservada por el launcher", "That key is reserved by the launcher"));
         else
           AssignBinding(m_remap_wait, sc);
       }
@@ -1832,7 +1872,7 @@ void App::HandleEvent(const SDL_Event& e)
     if (m_remap_device == 1 && e.type == SDL_CONTROLLERBUTTONDOWN)
     {
       if (e.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE)
-        Toast("El botón central está reservado para la pausa");
+        Toast(L("El botón central está reservado para la pausa", "The centre button is reserved for pause"));
       else
         AssignBinding(m_remap_wait, e.cbutton.button);
       return;
@@ -1875,10 +1915,10 @@ void App::HandleEvent(const SDL_Event& e)
       else if (IsDiscImage(path))
       {
         SetGamePath(path);
-        Toast("Juego: " + BaseName(path));
+        Toast(L("Juego: ", "Game: ") + BaseName(path));
       }
       else
-        Toast("Archivo no reconocido");
+        Toast(L("Archivo no reconocido", "File not recognised"));
       break;
     }
 
@@ -1916,7 +1956,7 @@ void App::HandleEvent(const SDL_Event& e)
       if (key == SDLK_F9 && !e.key.repeat)
       {
         std::string err;
-        Toast(m_r.ReloadShaders(&err) ? "Shaders recargados" : "Error en shaders");
+        Toast(m_r.ReloadShaders(&err) ? L("Shaders recargados", "Shaders reloaded") : L("Error en shaders", "Shader error"));
         if (!err.empty())
           SDL_Log("%s", err.c_str());
         break;
@@ -1966,7 +2006,7 @@ void App::HandleEvent(const SDL_Event& e)
             {
               std::fwrite(ram, 1, n, f);
               std::fclose(f);
-              Toast("RAM guardada para diagnóstico");
+              Toast(L("RAM guardada para diagnóstico", "RAM saved for diagnostics"));
             }
           }
         }
@@ -1974,18 +2014,18 @@ void App::HandleEvent(const SDL_Event& e)
         {
         }
         else if (key == SDLK_F5)
-          Toast(SaveStateNow() ? "Partida guardada" : "No se pudo guardar");
+          Toast(SaveStateNow() ? L("Partida guardada", "Game saved") : L("No se pudo guardar", "Could not save"));
         else if (key == SDLK_F7)
         {
           if (m_emu.LoadState(StatePath()))
           {
             if (!m_cheats_active)
               m_ach.BeginSession(false);
-            Toast("Partida cargada");
+            Toast(L("Partida cargada", "Game loaded"));
           }
           else
           {
-            Toast("No hay partida guardada");
+            Toast(L("No hay partida guardada", "No saved game"));
           }
         }
         break;
@@ -2132,6 +2172,12 @@ void App::HandleEvent(const SDL_Event& e)
         m_modal = Modal::None;
         break;
       }
+      // Con el menú de idioma abierto, un clic fuera de él sólo lo cierra.
+      if (m_lang_open && !m_lang_menu.Contains(m_mouse_px, m_mouse_py) && !m_tb_lang.Contains(m_mouse_px, m_mouse_py))
+      {
+        m_lang_open = false;
+        break;
+      }
       // En orden inverso: lo último dibujado está encima.
       const std::vector<HotZone> zones = m_hot;
       for (auto it = zones.rbegin(); it != zones.rend(); ++it)
@@ -2198,7 +2244,7 @@ void App::Update(float dt)
     if (m_remap_timer <= 0 || m_screen != Screen::Remap)
     {
       m_remap_wait = -1;
-      Toast("Sin cambios");
+      Toast(L("Sin cambios", "No changes"));
     }
   }
   m_picker.Poll();
@@ -2350,6 +2396,8 @@ void App::Render()
 
   if (m_emu.IsRunning() && (m_screen == Screen::Game || m_screen == Screen::Controls))
   {
+    m_tb_lang = m_lang_menu = {};
+    m_lang_open = false;
     RenderGame();
     if (m_screen == Screen::Controls)
       RenderControls();
@@ -2376,6 +2424,7 @@ void App::Render()
     if (m_modal == Modal::ConfirmReset)
       RenderConfirmReset();
     RenderTitleBar();
+    RenderLanguage();
     RenderTransition();
   }
   if (m_modal == Modal::Dialog)
@@ -2518,23 +2567,23 @@ float App::DrawGlyph(PsButton b, float x, float y, float h, PromptStyle style, b
       case SDL_CONTROLLER_BUTTON_B: return ps ? G{3, psRed, ""} : G{1, xB, "B"};
       case SDL_CONTROLLER_BUTTON_X: return ps ? G{4, psPink, ""} : G{1, xX, "X"};
       case SDL_CONTROLLER_BUTTON_Y: return ps ? G{5, psGreen, ""} : G{1, xY, "Y"};
-      case SDL_CONTROLLER_BUTTON_BACK: return {6, key, ps ? "Select" : "Vista"};
+      case SDL_CONTROLLER_BUTTON_BACK: return {6, key, ps ? "Select" : L("Vista", "View")};
       case SDL_CONTROLLER_BUTTON_GUIDE: return {6, key, ps ? "PS" : "Xbox"};
-      case SDL_CONTROLLER_BUTTON_START: return {6, key, ps ? "Start" : "Menú"};
+      case SDL_CONTROLLER_BUTTON_START: return {6, key, ps ? "Start" : L("Menú", "Menu")};
       case SDL_CONTROLLER_BUTTON_LEFTSTICK: return {6, key, ps ? "L3" : "LS"};
       case SDL_CONTROLLER_BUTTON_RIGHTSTICK: return {6, key, ps ? "R3" : "RS"};
       case SDL_CONTROLLER_BUTTON_LEFTSHOULDER: return {6, key, ps ? "L1" : "LB"};
       case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: return {6, key, ps ? "R1" : "RB"};
-      case SDL_CONTROLLER_BUTTON_DPAD_UP: return {6, key, "Cruceta arriba"};
-      case SDL_CONTROLLER_BUTTON_DPAD_DOWN: return {6, key, "Cruceta abajo"};
-      case SDL_CONTROLLER_BUTTON_DPAD_LEFT: return {6, key, "Cruceta izq."};
-      case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: return {6, key, "Cruceta der."};
-      case SDL_CONTROLLER_BUTTON_MISC1: return {6, key, ps ? "Micro" : "Compartir"};
+      case SDL_CONTROLLER_BUTTON_DPAD_UP: return {6, key, L("Cruceta arriba", "D-pad up")};
+      case SDL_CONTROLLER_BUTTON_DPAD_DOWN: return {6, key, L("Cruceta abajo", "D-pad down")};
+      case SDL_CONTROLLER_BUTTON_DPAD_LEFT: return {6, key, L("Cruceta izq.", "D-pad left")};
+      case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: return {6, key, L("Cruceta der.", "D-pad right")};
+      case SDL_CONTROLLER_BUTTON_MISC1: return {6, key, ps ? "Micro" : L("Compartir", "Share")};
       case SDL_CONTROLLER_BUTTON_PADDLE1: return {6, key, "P1"};
       case SDL_CONTROLLER_BUTTON_PADDLE2: return {6, key, "P2"};
       case SDL_CONTROLLER_BUTTON_PADDLE3: return {6, key, "P3"};
       case SDL_CONTROLLER_BUTTON_PADDLE4: return {6, key, "P4"};
-      case SDL_CONTROLLER_BUTTON_TOUCHPAD: return {6, key, "Panel táctil"};
+      case SDL_CONTROLLER_BUTTON_TOUCHPAD: return {6, key, L("Panel táctil", "Touchpad")};
       default: return {6, key, "—"};
     }
   };
@@ -2559,14 +2608,14 @@ float App::DrawGlyph(PsButton b, float x, float y, float h, PromptStyle style, b
             are_arrows &= m_cfg.KeyBind(dpad_ids[i]) == arrows[i];
             joined += (i ? " " : "") + KeyLabel(m_cfg.KeyBind(dpad_ids[i]));
           }
-          g.text = m_cfg.kb_mouse ? "WASD" : are_arrows ? "Flechas" : joined;
+          g.text = m_cfg.kb_mouse ? "WASD" : are_arrows ? L("Flechas", "Arrows") : joined;
           break;
         }
         case PsButton::Accept: g.text = "Enter"; break;
         case PsButton::Back:
         case PsButton::Pause: g.text = "Esc"; break;
         case PsButton::LStick: g.text = m_cfg.kb_mouse ? "WASD" : "—"; break;
-        case PsButton::RStick: g.text = m_cfg.kb_mouse ? "Ratón" : "—"; break;
+        case PsButton::RStick: g.text = m_cfg.kb_mouse ? L("Ratón", "Mouse") : "—"; break;
         default: g.text = "—"; break;
       }
   }
@@ -2591,11 +2640,11 @@ float App::DrawGlyph(PsButton b, float x, float y, float h, PromptStyle style, b
                                SDL_CONTROLLER_BUTTON_DPAD_LEFT, SDL_CONTROLLER_BUTTON_DPAD_RIGHT};
           for (int i = 0; i < 4; i++)
             is_dpad &= m_cfg.pad_bind[dpad_ids[i]] == dpad[i];
-          g = {6, key, is_dpad ? "Cruceta" : "Personalizada"};
+          g = {6, key, is_dpad ? L("Cruceta", "D-pad") : L("Personalizada", "Custom")};
           break;
         }
-        case PsButton::LStick: g = {6, key, "Stick izq."}; break;
-        case PsButton::RStick: g = {6, key, "Stick der."}; break;
+        case PsButton::LStick: g = {6, key, L("Stick izq.", "Left stick")}; break;
+        case PsButton::RStick: g = {6, key, L("Stick der.", "Right stick")}; break;
         case PsButton::Pause: g = {6, key, ps ? "L3 + R3  /  PS" : "LS + RS  /  Xbox"}; break;
         default: break;
       }
@@ -2634,7 +2683,7 @@ void App::RenderHints(const std::vector<std::pair<PsButton, std::string>>& hints
 }
 
 void App::DrawMenuButton(const Rect& slot, const std::string& label, const Texture* icon, float sel, float font,
-                         bool own_background, float alpha, float dx)
+                         bool own_background, float alpha, float dx, float reserve)
 {
   if (alpha <= 0.001f)
     return;
@@ -2653,11 +2702,15 @@ void App::DrawMenuButton(const Rect& slot, const std::string& label, const Textu
   if (icon)
     m_r.Sprite(*icon, r.x + IS(46), r.y + r.h / 2 - is / 2, is, is,
                sel > 0.5f ? Color{1, 1, 1, alpha} : Color{0.8f, 0.78f, 0.76f, 0.95f * alpha});
-  const float fs = IS(font);
+  // La etiqueta nunca pasa del borde derecho del botón (ni de la flecha de selección): si es larga
+  // se reduce la letra (hasta un 55 %) y, si aun así no cabe, se recorta.
+  const float max_w = r.w - IS(130) - IS(80) - IS(reserve);
+  float fs = IS(font);
+  if (const float w = m_r.TextWidth(m_r.brush, label, fs); w > max_w)
+    fs = std::max(fs * 0.55f, fs * max_w / w * 0.99f); // 0,99: que el redondeo no lo recorte
   const Color tc = {0.78f + 0.2f * sel, 0.76f + 0.2f * sel, 0.74f + 0.2f * sel, alpha};
-  // La etiqueta nunca pasa del borde derecho del botón (ni de la flecha de selección).
-  FitText(m_r.brush, label, r.x + IS(130) + IS(6) * sel, r.y + r.h / 2 - fs * 0.74f, r.w - IS(130) - IS(80), fs, tc,
-          Align::Left, false, -1);
+  FitText(m_r.brush, label, r.x + IS(130) + IS(6) * sel, r.y + r.h / 2 - fs * 0.74f, max_w, fs, tc, Align::Left,
+          false, -1);
   if (sel > 0.5f)
     m_r.DrawIcon(Icon::Chevron, r.x + r.w - IS(62), r.y + r.h / 2 - IS(13), IS(26), {1, 0.95f, 0.9f, sel * alpha});
 }
@@ -2701,6 +2754,119 @@ void App::RenderTitleBar()
     else
       SDL_MaximizeWindow(m_window);
   });
+}
+
+void App::SetLanguage(Lang lang)
+{
+  I18n::Current() = lang;
+  m_cfg.language = lang == Lang::En ? "en" : "es";
+  m_cfg.Save();
+}
+
+// Banderas dibujadas con rectángulos (proporción 3:2).
+void App::DrawFlag(Lang lang, float x, float y, float w, float h, float alpha)
+{
+  auto rect = [&](float rx, float ry, float rw, float rh, Color c) {
+    c.a *= alpha;
+    m_r.Rect(x + rx * w, y + ry * h, rw * w, rh * h, UiMode::Solid, c);
+  };
+  if (lang == Lang::Es)
+  {
+    // Rojo, gualda (el doble de ancha) y rojo; el escudo, simplificado, hacia el asta.
+    const Color red = {0.67f, 0.08f, 0.11f, 1}, gold = {0.95f, 0.75f, 0.0f, 1};
+    rect(0, 0, 1, 1, red);
+    rect(0, 0.25f, 1, 0.5f, gold);
+    rect(0.22f, 0.36f, 0.13f, 0.28f, {0.75f, 0.12f, 0.1f, 1});
+    rect(0.22f, 0.36f, 0.13f, 0.08f, {0.9f, 0.62f, 0.12f, 1});
+    rect(0.17f, 0.38f, 0.035f, 0.26f, {0.62f, 0.6f, 0.58f, 1});
+    rect(0.375f, 0.38f, 0.035f, 0.26f, {0.62f, 0.6f, 0.58f, 1});
+  }
+  else
+  {
+    // 13 franjas rojas y blancas; cantón azul (7 franjas de alto) con estrellas en filas alternas.
+    const Color red = {0.7f, 0.13f, 0.2f, 1}, white = {0.96f, 0.95f, 0.93f, 1}, blue = {0.24f, 0.23f, 0.43f, 1};
+    rect(0, 0, 1, 1, white);
+    for (int i = 0; i < 13; i += 2)
+      rect(0, i / 13.0f, 1, 1 / 13.0f, red);
+    const float ch = 7 / 13.0f, cw = 0.4f;
+    rect(0, 0, cw, ch, blue);
+    const float sw = std::max(1.0f, h * 0.045f);
+    for (int row = 0; row < 5; row++)
+      for (int col = 0; col < (row % 2 ? 4 : 5); col++)
+      {
+        const float sx = cw * ((row % 2 ? 0.2f : 0.1f) + col * 0.2f), sy = ch * (0.13f + row * 0.185f);
+        m_r.Rect(x + sx * w - sw / 2, y + sy * h - sw / 2, sw, sw, UiMode::Solid, {1, 1, 1, alpha});
+      }
+  }
+  // Borde fino oscuro.
+  const float b = std::max(1.0f, IS(1));
+  const Color edge = {0, 0, 0, 0.55f * alpha};
+  m_r.Rect(x, y, w, b, UiMode::Solid, edge);
+  m_r.Rect(x, y + h - b, w, b, UiMode::Solid, edge);
+  m_r.Rect(x, y, b, h, UiMode::Solid, edge);
+  m_r.Rect(x + w - b, y, b, h, UiMode::Solid, edge);
+}
+
+void App::RenderLanguage()
+{
+  const bool fullscreen = SDL_GetWindowFlags(m_window) & SDL_WINDOW_FULLSCREEN;
+  const float alpha = Smooth(2.0f, 2.4f, m_intro_t) * (m_outro_t >= 0 ? 1.0f - Smooth(0.05f, 0.4f, m_outro_t) : 1.0f);
+  if (alpha <= 0.001f)
+  {
+    m_tb_lang = m_lang_menu = {};
+    m_lang_open = false;
+    return;
+  }
+  // En ventana, dentro de la barra de título junto a minimizar; en pantalla completa, flotando en
+  // la misma esquina.
+  const float bw = IS(58), bh = IS(kTitleH);
+  if (fullscreen)
+  {
+    m_tb_lang = {m_w - bw - IS(16), IS(12), bw, bh};
+    m_r.Rect(m_tb_lang.x, m_tb_lang.y, m_tb_lang.w, m_tb_lang.h, UiMode::Solid, {0.03f, 0.025f, 0.025f, 0.8f * alpha});
+  }
+  else
+  {
+    m_tb_lang = {m_tb_min.x - bw, 0, bw, bh};
+  }
+  const Rect& b = m_tb_lang;
+  if (b.Contains(m_mouse_px, m_mouse_py) || m_lang_open)
+    m_r.Rect(b.x, b.y, b.w, b.h, UiMode::Solid, {1, 1, 1, 0.1f * alpha});
+  const float fh = IS(18), fw = fh * 1.5f;
+  DrawFlag(I18n::Current(), b.x + (b.w - fw) / 2, b.y + (b.h - fh) / 2, fw, fh, alpha);
+  Hot(b, 5, 3, [this](float, float) {
+    m_lang_open = !m_lang_open;
+    m_audio.Play(m_lang_open ? Sfx::Select : Sfx::Cancel);
+  });
+
+  if (!m_lang_open)
+  {
+    m_lang_menu = {};
+    return;
+  }
+  // Menú: una fila por idioma, con su bandera y su nombre en ese idioma.
+  const float mw = IS(230), rh = IS(52);
+  m_lang_menu = {std::min(b.x + b.w, static_cast<float>(m_w)) - mw, b.y + b.h + IS(4), mw, rh * 2 + IS(12)};
+  const Rect& m = m_lang_menu;
+  m_r.Rect(m.x, m.y, m.w, m.h, UiMode::Panel, {0.035f, 0.025f, 0.025f, 0.97f}, {0.75f, 0.06f, 0.05f, 0.95f});
+  const std::pair<Lang, const char*> langs[2] = {{Lang::Es, "Español"}, {Lang::En, "English"}};
+  for (int i = 0; i < 2; i++)
+  {
+    const Rect row = {m.x + IS(6), m.y + IS(6) + i * rh, m.w - IS(12), rh};
+    const bool current = langs[i].first == I18n::Current();
+    if (row.Contains(m_mouse_px, m_mouse_py))
+      m_r.Rect(row.x, row.y, row.w, row.h, UiMode::Solid, {0.75f, 0.06f, 0.05f, 0.45f});
+    const float h = IS(22), w = h * 1.5f;
+    DrawFlag(langs[i].first, row.x + IS(14), row.y + (rh - h) / 2, w, h, 1);
+    m_r.Text(m_r.ui, langs[i].second, row.x + IS(14) + w + IS(16), row.y + (rh - IS(26) * 1.48f) / 2, IS(26),
+             current ? kGold : kWhite);
+    const Lang lang = langs[i].first;
+    Hot(row, 5, 10 + i, [this, lang](float, float) {
+      m_audio.Play(Sfx::Select);
+      SetLanguage(lang);
+      m_lang_open = false;
+    });
+  }
 }
 
 // Capa de transición: kanji en un ensō y barrido de tinta (apertura y cierre).
@@ -2747,17 +2913,22 @@ void App::RenderMenu()
     const float w = IS(680) * logo_s, h = IS(308) * logo_s;
     m_r.Sprite(m_logo, IX(50 + 340) - w / 2, IY(64 + 154) - h / 2, w, h, {1, 1, 1, logo_a});
   }
-  m_r.Sprite(m_tagline, IX(60), IY(860), IS(420), IS(152), {1, 1, 1, tag_a});
+  m_r.Sprite(LangEn() ? m_tagline_en : m_tagline, IX(60), IY(860), IS(420), IS(152), {1, 1, 1, tag_a});
 
-  const char* labels[kMenuItems] = {"JUGAR", "LOGROS", "OPCIONES", "CRÉDITOS", "SALIR"};
+  const char* labels[kMenuItems] = {L("JUGAR", "PLAY"), L("LOGROS", "ACHIEVEMENTS"), L("OPCIONES", "OPTIONS"),
+                                    L("CRÉDITOS", "CREDITS"), L("SALIR", "QUIT")};
   const Texture* icons[kMenuItems] = {&m_ic_play, &m_ic_ach, &m_ic_opt, nullptr, &m_ic_quit};
+  // Progreso de logros: junto a la etiqueta si cabe; si no («ACHIEVEMENTS»), pequeño en la esquina.
+  const bool counter = m_ach.GetState() == Achievements::State::Ready;
+  const bool counter_inline = m_r.TextWidth(m_r.brush, labels[1], IS(44)) <= IS(kMenuSlots[1].w - 130 - 80 - 70);
   for (int i = 0; i < kMenuItems; i++)
   {
     float e = EaseOut((T - 1.35f - i * 0.09f) / 0.38f);
     if (O >= 0)
       e *= 1.0f - EaseInOut((O - i * 0.05f) / 0.3f);
     const float sel = m_modal == Modal::None ? m_sel_anim[i] : 0.0f;
-    DrawMenuButton(kMenuSlots[i], labels[i], icons[i], sel, 44, true, e, -(1.0f - e) * IS(420));
+    DrawMenuButton(kMenuSlots[i], labels[i], icons[i], sel, 44, true, e, -(1.0f - e) * IS(420),
+                   i == 1 && counter_inline ? 70.0f : 0.0f);
     if (!icons[i] && e > 0.001f)
     {
       // CRÉDITOS: pergamino dibujado en el hueco del icono.
@@ -2773,11 +2944,14 @@ void App::RenderMenu()
   }
 
   // Progreso de logros dentro del botón LOGROS.
-  if (m_ach.GetState() == Achievements::State::Ready)
+  if (counter)
   {
     const std::string p = std::to_string(m_ach.EarnedCount()) + "/" + std::to_string(m_ach.List().size());
     const Rect r = IR(kMenuSlots[1]);
-    m_r.Text(m_r.ui, p, r.x + r.w - IS(90), r.y + r.h / 2 - IS(17), IS(24), WithAlpha(kGold, info_a), Align::Right);
+    if (counter_inline)
+      m_r.Text(m_r.ui, p, r.x + r.w - IS(90), r.y + r.h / 2 - IS(17), IS(24), WithAlpha(kGold, info_a), Align::Right);
+    else
+      m_r.Text(m_r.ui, p, r.x + r.w - IS(30), r.y + r.h - IS(26), IS(18), WithAlpha(kGold, info_a), Align::Right);
   }
 
   // Estado del disco y pistas de controles (abajo a la derecha).
@@ -2785,17 +2959,17 @@ void App::RenderMenu()
   Color sc = {0.82f, 0.8f, 0.78f, 0.75f};
   if (m_cfg.game_path.empty() || !Paths::FileExists(m_cfg.game_path))
   {
-    status = "Sin disco: copia tu imagen en la carpeta game/ o arrástrala aquí";
+    status = L("Sin disco: copia tu imagen en la carpeta game/ o arrástrala aquí", "No disc: copy your image into the game/ folder or drag it here");
     sc = {1.0f, 0.75f, 0.3f, 0.95f};
   }
   else
   {
-    status = "Disco: " + BaseName(m_cfg.game_path);
+    status = L("Disco: ", "Disc: ") + BaseName(m_cfg.game_path);
   }
   m_r.Text(m_r.ui, Truncate(m_r.ui, status, IS(20), m_w * 0.5f), m_w - IS(28), m_h - IS(92), IS(20),
            WithAlpha(sc, info_a), Align::Right);
   if (info_a > 0.99f)
-    RenderHints({{PsButton::Accept, "Aceptar"}}, m_w - IS(28), m_h - IS(58));
+    RenderHints({{PsButton::Accept, L("Aceptar", "Accept")}}, m_w - IS(28), m_h - IS(58));
 }
 
 void App::RenderPlayChoice()
@@ -2803,8 +2977,8 @@ void App::RenderPlayChoice()
   DimScreen(0.55f);
   const float x = 470, y = 300, w = 620, h = 470;
   Panel(x, y, w, h);
-  m_r.Text(m_r.brush, "JUGAR", IX(x + 44), IY(y + 24), IS(52), kWhite);
-  const char* labels[3] = {"CONTINUAR", "NUEVA PARTIDA", "CANCELAR"};
+  m_r.Text(m_r.brush, L("JUGAR", "PLAY"), IX(x + 44), IY(y + 24), IS(52), kWhite);
+  const char* labels[3] = {L("CONTINUAR", "CONTINUE"), L("NUEVA PARTIDA", "NEW GAME"), L("CANCELAR", "CANCEL")};
   const Texture* icons[3] = {&m_ic_play, &m_ic_ach, &m_ic_quit};
   for (int i = 0; i < 3; i++)
   {
@@ -2815,21 +2989,21 @@ void App::RenderPlayChoice()
       Accept();
     });
   }
-  RenderHints({{PsButton::Accept, "Aceptar"}, {PsButton::Back, "Volver"}}, IX(x + w - 30), IY(y + h + 16));
+  RenderHints({{PsButton::Accept, L("Aceptar", "Accept")}, {PsButton::Back, L("Volver", "Back")}}, IX(x + w - 30), IY(y + h + 16));
 }
 
 void App::RenderOptionCategories()
 {
   const float px = 40, py = 56, pw = 640, ph = 950;
   Panel(px, py, pw, ph);
-  m_r.Text(m_r.brush, "OPCIONES", IX(px + 44), IY(py + 20), IS(56), kWhite);
+  m_r.Text(m_r.brush, L("OPCIONES", "OPTIONS"), IX(px + 44), IY(py + 20), IS(56), kWhite);
   m_r.Sprite(m_ic_opt, IX(px + pw - 110), IY(py + 26), IS(62), IS(62), {0.8f, 0.78f, 0.76f, 0.8f});
 
   for (int i = 0; i <= kOptCategoryCount; i++)
   {
     const bool back = (i == kOptCategoryCount);
     const Rect slot = {px + 60, py + 140 + i * 104.0f + (back ? 30.0f : 0.0f), 462, 88};
-    DrawMenuButton(slot, back ? "VOLVER" : kOptCategories[i], back ? &m_ic_quit : nullptr, m_sel_anim[i], 36, true);
+    DrawMenuButton(slot, back ? L("VOLVER", "BACK") : OptCategory(i), back ? &m_ic_quit : nullptr, m_sel_anim[i], 36, true);
     if (!back)
     {
       // Kanji de la categoría en el lugar del icono.
@@ -2848,7 +3022,7 @@ void App::RenderOptionCategories()
   if (m_opt_sel < kOptCategoryCount)
   {
     float ly = py + 140 + (kOptCategoryCount + 1) * 104.0f + 60;
-    for (const std::string& line : Wrap(m_r.ui, kOptCategoryHelp[m_opt_sel], IS(25), IS(pw - 100)))
+    for (const std::string& line : Wrap(m_r.ui, OptCategoryHelp(m_opt_sel), IS(25), IS(pw - 100)))
     {
       m_r.Text(m_r.ui, line, IX(px + 60), IY(ly), IS(25), {0.84f, 0.81f, 0.78f, 0.95f});
       ly += 34;
@@ -2858,13 +3032,16 @@ void App::RenderOptionCategories()
   // Créditos y licencias.
   const float cx = m_w - IS(28);
   const Color cc = {0.8f, 0.78f, 0.76f, 0.8f};
-  m_r.Text(m_r.ui, std::string("Kage no Mon ") + kVersion + " · software libre (GPL-3.0) · sin fines de lucro",
+  m_r.Text(m_r.ui, std::string("Kage no Mon ") + kVersion + L(" · software libre (GPL-3.0) · sin fines de lucro",
+                                                               " · free software (GPL-3.0) · non-profit"),
            cx, m_h - IS(150), IS(19), cc, Align::Right);
-  m_r.Text(m_r.ui, "Núcleo: SwanStation (GPL-3.0) · Logros: rcheevos (MIT) / RetroAchievements", cx, m_h - IS(124),
+  m_r.Text(m_r.ui, L("Núcleo: SwanStation (GPL-3.0) · Logros: rcheevos (MIT) / RetroAchievements",
+                     "Core: SwanStation (GPL-3.0) · Achievements: rcheevos (MIT) / RetroAchievements"), cx, m_h - IS(124),
            IS(19), cc, Align::Right);
-  m_r.Text(m_r.ui, "Fuentes: Permanent Marker (Apache-2.0), Oswald, Shojumaru, Yuji Syuku (OFL)", cx, m_h - IS(98),
+  m_r.Text(m_r.ui, L("Fuentes: Permanent Marker (Apache-2.0), Oswald, Shojumaru, Yuji Syuku (OFL)",
+                     "Fonts: Permanent Marker (Apache-2.0), Oswald, Shojumaru, Yuji Syuku (OFL)"), cx, m_h - IS(98),
            IS(19), cc, Align::Right);
-  RenderHints({{PsButton::Accept, "Aceptar"}, {PsButton::Back, "Volver"}}, m_w - IS(28), m_h - IS(58));
+  RenderHints({{PsButton::Accept, L("Aceptar", "Accept")}, {PsButton::Back, L("Volver", "Back")}}, m_w - IS(28), m_h - IS(58));
 }
 
 void App::RenderOptions()
@@ -2878,12 +3055,12 @@ void App::RenderOptions()
 
   const float px = 40, py = 56, pw = 880, ph = 950;
   Panel(px, py, pw, ph);
-  m_r.Text(m_r.ui, "OPCIONES", IX(px + 48), IY(py + 18), IS(22), kDim);
-  m_r.Text(m_r.brush, kOptCategories[m_opt_page], IX(px + 44), IY(py + 42), IS(52), kWhite);
+  m_r.Text(m_r.ui, L("OPCIONES", "OPTIONS"), IX(px + 48), IY(py + 18), IS(22), kDim);
+  m_r.Text(m_r.brush, OptCategory(m_opt_page), IX(px + 44), IY(py + 42), IS(52), kWhite);
   m_r.TextCentered(m_r.kanji, kOptKanji[m_opt_page], IX(px + pw - 80), IY(py + 70), IS(84),
                    {0.6f, 0.04f, 0.04f, 0.45f});
 
-  auto yesno = [](bool b) { return std::string(b ? "Sí" : "No"); };
+  auto yesno = [](bool b) { return std::string(b ? L("Sí", "Yes") : "No"); };
   const bool hw = m_cfg.hardware_renderer;
 
   struct Row
@@ -2896,83 +3073,83 @@ void App::RenderOptions()
     switch (id)
     {
       case OPT_GAME:
-        return {"Imagen del juego", m_cfg.game_path.empty() ? "(sin seleccionar)" : BaseName(m_cfg.game_path)};
+        return {L("Imagen del juego", "Game image"), m_cfg.game_path.empty() ? L("(sin seleccionar)", "(not selected)") : BaseName(m_cfg.game_path)};
       case OPT_BIOS:
       {
         const bool has_files = !Paths::FindBiosFiles().empty();
         const bool chosen = !m_cfg.bios_file.empty() && Paths::FileExists(Paths::BiosDir() + "/" + m_cfg.bios_file);
-        return {"BIOS", chosen ? BiosLabel(m_cfg.bios_file) : "OpenBIOS (libre, integrada)", true, has_files};
+        return {"BIOS", chosen ? BiosLabel(m_cfg.bios_file) : L("OpenBIOS (libre, integrada)", "OpenBIOS (free, built-in)"), true, has_files};
       }
-      case OPT_BIOS_LOAD: return {"Cargar BIOS nueva…", ""};
-      case OPT_FASTBOOT: return {"Arranque rápido", yesno(m_cfg.fast_boot), true, true};
+      case OPT_BIOS_LOAD: return {L("Cargar BIOS nueva…", "Load new BIOS…"), ""};
+      case OPT_FASTBOOT: return {L("Arranque rápido", "Fast boot"), yesno(m_cfg.fast_boot), true, true};
       case OPT_HARDCORE:
-        return {"Modo hardcore",
-                m_cfg.hardcore ? (HasSonyBios() ? "Sí" : "Sí (falta la BIOS original)") : "No", true, true};
-      case OPT_RENDERER: return {"Renderizador", hw ? "OpenGL (mejorado)" : "Software (preciso)", true, true};
-      case OPT_SCALE: return {"Resolución interna", std::to_string(m_cfg.resolution_scale) + "x", hw, true};
+        return {L("Modo hardcore", "Hardcore mode"),
+                m_cfg.hardcore ? (HasSonyBios() ? L("Sí", "Yes") : L("Sí (falta la BIOS original)", "Yes (original BIOS missing)")) : "No", true, true};
+      case OPT_RENDERER: return {L("Renderizador", "Renderer"), hw ? L("OpenGL (mejorado)", "OpenGL (enhanced)") : L("Software (preciso)", "Software (accurate)"), true, true};
+      case OPT_SCALE: return {L("Resolución interna", "Internal resolution"), std::to_string(m_cfg.resolution_scale) + "x", hw, true};
       case OPT_TEXFILTER:
       {
         const std::string tf = m_cfg.texture_filter == "Nearest"    ? "Original"
-                               : m_cfg.texture_filter == "Bilinear" ? "Bilineal"
+                               : m_cfg.texture_filter == "Bilinear" ? L("Bilineal", "Bilinear")
                                                                      : m_cfg.texture_filter + " (HD)";
-        return {"Filtro de texturas", tf, hw, true};
+        return {L("Filtro de texturas", "Texture filter"), tf, hw, true};
       }
       case OPT_PGXP:
-        return {"Corregir geometría (PGXP)", !m_cfg.pgxp ? "No" : m_cfg.pgxp_cpu ? "Máxima" : "Sí", hw, true};
+        return {L("Corregir geometría (PGXP)", "Fix geometry (PGXP)"), !m_cfg.pgxp ? "No" : m_cfg.pgxp_cpu ? L("Máxima", "Maximum") : L("Sí", "Yes"), hw, true};
       case OPT_WIDESCREEN:
-        return {"Aspecto de la pantalla",
-                m_ws_available ? (m_cfg.widescreen ? "16:9" : "4:3") : "4:3 (16:9 no disponible para este disco)",
+        return {L("Aspecto de la pantalla", "Aspect ratio"),
+                m_ws_available ? (m_cfg.widescreen ? "16:9" : "4:3") : L("4:3 (16:9 no disponible para este disco)", "4:3 (16:9 not available for this disc)"),
                 m_ws_available, m_ws_available};
-      case OPT_SIDEART: return {"Bordes laterales", m_cfg.side_art ? "Ilustración" : "Negro", true, true};
-      case OPT_SMOOTH: return {"Suavizar imagen", yesno(m_cfg.smooth_filter), true, true};
-      case OPT_FULLSCREEN: return {"Pantalla completa", yesno(m_cfg.fullscreen), true, true};
-      case OPT_VOLUME: return {"Volumen del juego", std::to_string(m_cfg.volume) + "%", true, true};
-      case OPT_MUSIC: return {"Volumen de la música", std::to_string(m_cfg.music_volume) + "%", true, true};
-      case OPT_SFX: return {"Volumen de efectos", std::to_string(m_cfg.sfx_volume) + "%", true, true};
+      case OPT_SIDEART: return {L("Bordes laterales", "Side borders"), m_cfg.side_art ? L("Ilustración", "Artwork") : L("Negro", "Black"), true, true};
+      case OPT_SMOOTH: return {L("Suavizar imagen", "Smooth image"), yesno(m_cfg.smooth_filter), true, true};
+      case OPT_FULLSCREEN: return {L("Pantalla completa", "Fullscreen"), yesno(m_cfg.fullscreen), true, true};
+      case OPT_VOLUME: return {L("Volumen del juego", "Game volume"), std::to_string(m_cfg.volume) + "%", true, true};
+      case OPT_MUSIC: return {L("Volumen de la música", "Music volume"), std::to_string(m_cfg.music_volume) + "%", true, true};
+      case OPT_SFX: return {L("Volumen de efectos", "Effects volume"), std::to_string(m_cfg.sfx_volume) + "%", true, true};
       case OPT_PROMPTS:
       {
-        const std::string p = m_cfg.prompt_style == "keyboard"      ? "Teclado"
+        const std::string p = m_cfg.prompt_style == "keyboard"      ? L("Teclado", "Keyboard")
                               : m_cfg.prompt_style == "xbox"        ? "Xbox"
                               : m_cfg.prompt_style == "playstation" ? "PlayStation"
-                                                                    : "Automático";
-        return {"Iconos de botones", p, true, true};
+                                                                    : L("Automático", "Automatic");
+        return {L("Iconos de botones", "Button icons"), p, true, true};
       }
       case OPT_FREE_CAMERA:
       {
         FreeCamera probe;
         const bool known = probe.SetGame(Paths::ReadDiscSerial(m_cfg.game_path));
-        return {"Cámara libre (joystick derecho)",
-                !known ? "No disponible para este disco" : m_cfg.hardcore ? "No (modo hardcore)" : yesno(m_cfg.free_camera),
+        return {L("Cámara libre (joystick derecho)", "Free camera (right stick)"),
+                !known ? L("No disponible para este disco", "Not available for this disc") : m_cfg.hardcore ? L("No (modo hardcore)", "No (hardcore mode)") : yesno(m_cfg.free_camera),
                 known && !m_cfg.hardcore, known && !m_cfg.hardcore};
       }
       case OPT_MOVEMENT:
       {
         FreeCamera probe;
         const bool ok = probe.SetGame(Paths::ReadDiscSerial(m_cfg.game_path)) && !m_cfg.hardcore && m_cfg.free_camera;
-        return {"Movimiento", !ok ? "Clásico (tanque)" : m_cfg.modern_controls ? "360° (relativo a la cámara)" : "Clásico (tanque)",
+        return {L("Movimiento", "Movement"), !ok ? L("Clásico (tanque)", "Classic (tank)") : m_cfg.modern_controls ? L("360° (relativo a la cámara)", "360° (camera-relative)") : L("Clásico (tanque)", "Classic (tank)"),
                 ok, ok};
       }
       case OPT_CAMERA_SPEED:
       {
         FreeCamera probe;
         const bool on = probe.SetGame(Paths::ReadDiscSerial(m_cfg.game_path)) && !m_cfg.hardcore && m_cfg.free_camera;
-        return {"Velocidad de la cámara", std::to_string(m_cfg.camera_speed) + "%", on, on,
+        return {L("Velocidad de la cámara", "Camera speed"), std::to_string(m_cfg.camera_speed) + "%", on, on,
                 (m_cfg.camera_speed - 20) / 280.0f};
       }
       case OPT_GAME_PROMPTS:
       {
-        return {"Iconos dentro del juego", m_cfg.game_prompts ? "Según el mando" : "Originales (PlayStation)", true,
+        return {L("Iconos dentro del juego", "In-game icons"), m_cfg.game_prompts ? L("Según el mando", "Match controller") : L("Originales (PlayStation)", "Original (PlayStation)"), true,
                 true};
       }
       case OPT_REMAP_KB:
-        return {"Personalizar teclado", m_cfg.kb_mouse ? "Esquema fijo (teclado y ratón)" : "", !m_cfg.kb_mouse, false};
+        return {L("Personalizar teclado", "Customise keyboard"), m_cfg.kb_mouse ? L("Esquema fijo (teclado y ratón)", "Fixed layout (keyboard & mouse)") : "", !m_cfg.kb_mouse, false};
       case OPT_KB_SCHEME:
-        return {"Esquema de teclado", m_cfg.kb_mouse ? "Teclado y ratón" : "Sólo teclado", true, true};
-      case OPT_REMAP_PAD: return {"Personalizar mando", ""};
+        return {L("Esquema de teclado", "Keyboard layout"), m_cfg.kb_mouse ? L("Teclado y ratón", "Keyboard & mouse") : L("Sólo teclado", "Keyboard only"), true, true};
+      case OPT_REMAP_PAD: return {L("Personalizar mando", "Customise controller"), ""};
       case OPT_RESET_CONTROLS:
-        return {"Restaurar controles por defecto", m_reset_confirm > 0 ? "¿Seguro? Pulsa otra vez" : ""};
-      case OPT_CONTROLS: return {"Ver esquema de controles", ""};
-      case OPT_BACK: return {"Volver", ""};
+        return {L("Restaurar controles por defecto", "Restore default controls"), m_reset_confirm > 0 ? L("¿Seguro? Pulsa otra vez", "Sure? Press again") : ""};
+      case OPT_CONTROLS: return {L("Ver esquema de controles", "View controls layout"), ""};
+      case OPT_BACK: return {L("Volver", "Back"), ""};
     }
     return {};
   };
@@ -3054,61 +3231,78 @@ void App::RenderOptions()
   const char* help = "";
   switch (rows[m_opt_sel])
   {
-    case OPT_GAME: help = "Tu copia del disco (.cue, .bin, .chd…). La carpeta game/ del launcher se detecta sola."; break;
+    case OPT_GAME: help = L("Tu copia del disco (.cue, .bin, .chd…). La carpeta game/ del launcher se detecta sola.", "Your copy of the disc (.cue, .bin, .chd…). The launcher's game/ folder is detected automatically."); break;
     case OPT_BIOS:
-      help = "OpenBIOS es libre y viene integrada. Si un juego da problemas, carga la BIOS de tu consola y elígela "
-             "aquí.";
+      help = L("OpenBIOS es libre y viene integrada. Si un juego da problemas, carga la BIOS de tu consola y elígela "
+               "aquí.",
+               "OpenBIOS is free and built in. If a game has problems, load your console's BIOS and choose it here.");
       break;
-    case OPT_BIOS_LOAD: help = "Copia una BIOS (archivo de 512 KB) a la carpeta bios/ y la deja elegida."; break;
-    case OPT_FASTBOOT: help = "Salta la animación de arranque de la consola."; break;
+    case OPT_BIOS_LOAD: help = L("Copia una BIOS (archivo de 512 KB) a la carpeta bios/ y la deja elegida.", "Copies a BIOS (512 KB file) into the bios/ folder and selects it."); break;
+    case OPT_FASTBOOT: help = L("Salta la animación de arranque de la consola.", "Skips the console's boot animation."); break;
     case OPT_HARDCORE:
-      help = "Como en la consola: BIOS original, sin estados guardados ni trucos; sólo la tarjeta de memoria. Los "
-             "logros conseguidos así se marcan como hardcore.";
+      help = L("Como en la consola: BIOS original, sin estados guardados ni trucos; sólo la tarjeta de memoria. Los "
+               "logros conseguidos así se marcan como hardcore.",
+               "Like on the console: original BIOS, no save states or cheats; memory card only. Achievements earned "
+               "this way are marked as hardcore.");
       break;
-    case OPT_RENDERER: help = "OpenGL permite alta resolución. Software es el más fiel al hardware original."; break;
+    case OPT_RENDERER: help = L("OpenGL permite alta resolución. Software es el más fiel al hardware original.", "OpenGL allows high resolution. Software is the most faithful to the original hardware."); break;
     case OPT_SCALE:
-      help = "Resolución de PlayStation multiplicada: 4x ≈ 960p, 5x ≈ 1080p. 3x no se ofrece porque corrompe el texto "
-             "del juego.";
+      help = L("Resolución de PlayStation multiplicada: 4x ≈ 960p, 5x ≈ 1080p. 3x no se ofrece porque corrompe el texto "
+               "del juego.",
+               "PlayStation resolution multiplied: 4x ≈ 960p, 5x ≈ 1080p. 3x is not offered because it corrupts the "
+               "game's text.");
       break;
-    case OPT_TEXFILTER: help = "xBR y JINC2 redibujan las texturas en alta definición. Original = píxeles tal cual."; break;
+    case OPT_TEXFILTER: help = L("xBR y JINC2 redibujan las texturas en alta definición. Original = píxeles tal cual.", "xBR and JINC2 redraw textures in high definition. Original = pixels as they are."); break;
     case OPT_PGXP:
-      help = "Evita que polígonos y texturas tiemblen o «respiren». Máxima corrige también el suelo y el "
-             "escenario (usa algo más de CPU).";
+      help = L("Evita que polígonos y texturas tiemblen o «respiren». Máxima corrige también el suelo y el "
+               "escenario (usa algo más de CPU).",
+               "Stops polygons and textures from wobbling or “breathing”. Maximum also fixes the floor and the "
+               "scenery (uses a bit more CPU).");
       break;
     case OPT_WIDESCREEN:
-      help = "4:3 es el formato original. 16:9 usa un parche del propio juego (El_Patas y PeterDelta): más campo de "
-             "visión; el HUD queda en su sitio, aunque algo más ancho.";
+      help = L("4:3 es el formato original. 16:9 usa un parche del propio juego (El_Patas y PeterDelta): más campo de "
+               "visión; el HUD queda en su sitio, aunque algo más ancho.",
+               "4:3 is the original format. 16:9 uses a patch of the game itself (El_Patas and PeterDelta): a wider "
+               "field of view; the HUD stays in place, though somewhat wider.");
       break;
-    case OPT_SIDEART: help = "Con el juego en 4:3, los lados muestran la ilustración del launcher oscurecida o negro."; break;
-    case OPT_SMOOTH: help = "Suaviza la imagen al escalarla a la ventana (No = píxeles nítidos)."; break;
-    case OPT_FULLSCREEN: help = "También con F11 o Alt+Enter."; break;
-    case OPT_VOLUME: help = "Volumen del sonido del juego."; break;
-    case OPT_MUSIC: help = "Música del launcher (menús y pausa)."; break;
-    case OPT_SFX: help = "Sonidos del launcher al moverte, elegir y cancelar."; break;
-    case OPT_PROMPTS: help = "Iconos de botones del launcher. Automático cambia según uses teclado o mando."; break;
+    case OPT_SIDEART: help = L("Con el juego en 4:3, los lados muestran la ilustración del launcher oscurecida o negro.", "With the game in 4:3, the sides show the launcher artwork dimmed, or black."); break;
+    case OPT_SMOOTH: help = L("Suaviza la imagen al escalarla a la ventana (No = píxeles nítidos).", "Smooths the image when scaling it to the window (No = sharp pixels)."); break;
+    case OPT_FULLSCREEN: help = L("También con F11 o Alt+Enter.", "Also with F11 or Alt+Enter."); break;
+    case OPT_VOLUME: help = L("Volumen del sonido del juego.", "Volume of the game's sound."); break;
+    case OPT_MUSIC: help = L("Música del launcher (menús y pausa).", "Launcher music (menus and pause)."); break;
+    case OPT_SFX: help = L("Sonidos del launcher al moverte, elegir y cancelar.", "Launcher sounds when moving, choosing and cancelling."); break;
+    case OPT_PROMPTS: help = L("Iconos de botones del launcher. Automático cambia según uses teclado o mando.", "Launcher button icons. Automatic switches depending on whether you use keyboard or controller."); break;
     case OPT_MOVEMENT:
-      help = "360°: corre hacia donde empujas el joystick, según la cámara. Clásico: controles de tanque.";
+      help = L("360°: corre hacia donde empujas el joystick, según la cámara. Clásico: controles de tanque.", "360°: run wherever you push the stick, relative to the camera. Classic: tank controls.");
       break;
     case OPT_CAMERA_SPEED:
-      help = "Lo rápido que gira la cámara libre con el joystick derecho. 100% es la velocidad normal; también "
-             "puedes hacer clic en la barra.";
+      help = L("Lo rápido que gira la cámara libre con el joystick derecho. 100% es la velocidad normal; también "
+               "puedes hacer clic en la barra.",
+               "How fast the free camera turns with the right stick. 100% is normal speed; you can also click the "
+               "bar.");
       break;
     case OPT_FREE_CAMERA:
-      help = "Joystick derecho: gira la cámara (respeta los muros). R3: la devuelve detrás. L3: fija al enemigo "
-             "a la vista más cercano (joystick derecho a un lado cambia de enemigo). No en hardcore.";
+      help = L("Joystick derecho: gira la cámara (respeta los muros). R3: la devuelve detrás. L3: fija al enemigo "
+               "a la vista más cercano (joystick derecho a un lado cambia de enemigo). No en hardcore.",
+               "Right stick: turns the camera (it respects walls). R3: brings it back behind. L3: locks on to the "
+               "nearest visible enemy (right stick to one side switches enemy). Not in hardcore.");
       break;
     case OPT_GAME_PROMPTS:
-      help = "Los iconos de botones de los menús del juego se cambian por los de tu mando de Xbox o tu teclado, "
-             "con tus asignaciones.";
+      help = L("Los iconos de botones de los menús del juego se cambian por los de tu mando de Xbox o tu teclado, "
+               "con tus asignaciones.",
+               "The button icons in the game's menus are replaced with those of your Xbox controller or your "
+               "keyboard, with your bindings.");
       break;
-    case OPT_CONTROLS: help = "Teclado, mando de Xbox y mando de PlayStation, con tus asignaciones."; break;
-    case OPT_REMAP_KB: help = "Cambia qué tecla corresponde a cada botón. No afecta al mando."; break;
+    case OPT_CONTROLS: help = L("Teclado, mando de Xbox y mando de PlayStation, con tus asignaciones.", "Keyboard, Xbox controller and PlayStation controller, with your bindings."); break;
+    case OPT_REMAP_KB: help = L("Cambia qué tecla corresponde a cada botón. No afecta al mando.", "Changes which key maps to each button. Does not affect the controller."); break;
     case OPT_KB_SCHEME:
-      help = "Teclado y ratón: WASD para moverse, el ratón mueve la cámara, clic izquierdo ataca, clic derecho usa "
-             "la herramienta y la rueda la cambia. Esquema completo en Ver esquema de controles.";
+      help = L("Teclado y ratón: WASD para moverse, el ratón mueve la cámara, clic izquierdo ataca, clic derecho usa "
+               "la herramienta y la rueda la cambia. Esquema completo en Ver esquema de controles.",
+               "Keyboard & mouse: WASD to move, the mouse moves the camera, left click attacks, right click uses "
+               "the tool and the wheel switches it. Full layout in View controls layout.");
       break;
-    case OPT_REMAP_PAD: help = "Cambia qué botón del mando corresponde a cada botón. No afecta al teclado."; break;
-    case OPT_RESET_CONTROLS: help = "Vuelve a la asignación original de teclado y mando (pide confirmación)."; break;
+    case OPT_REMAP_PAD: help = L("Cambia qué botón del mando corresponde a cada botón. No afecta al teclado.", "Changes which controller button maps to each button. Does not affect the keyboard."); break;
+    case OPT_RESET_CONTROLS: help = L("Vuelve a la asignación original de teclado y mando (pide confirmación).", "Goes back to the original keyboard and controller bindings (asks for confirmation)."); break;
     default: help = ""; break;
   }
   float ly = row0 + rows.size() * rh + 60;
@@ -3120,9 +3314,9 @@ void App::RenderOptions()
     ly += 33;
   }
   if (m_opt_page == 1)
-    m_r.Text(m_r.ui, "Los cambios de imagen se aplican la próxima vez que inicies el juego.", IX(px + 52),
+    m_r.Text(m_r.ui, L("Los cambios de imagen se aplican la próxima vez que inicies el juego.", "Graphics changes apply the next time you start the game."), IX(px + 52),
              IY(py + ph - 64), IS(20), kDim);
-  RenderHints({{PsButton::Accept, "Aceptar"}, {PsButton::Back, "Volver"}}, m_w - IS(28), m_h - IS(58));
+  RenderHints({{PsButton::Accept, L("Aceptar", "Accept")}, {PsButton::Back, L("Volver", "Back")}}, m_w - IS(28), m_h - IS(58));
 }
 
 void App::RenderRemap()
@@ -3131,8 +3325,8 @@ void App::RenderRemap()
   const float px = 40, py = 56, pw = 900, ph = 950;
   Panel(px, py, pw, ph);
   const bool kb = (m_remap_device == 0);
-  m_r.Text(m_r.ui, "OPCIONES  ·  CONTROLES", IX(px + 48), IY(py + 18), IS(22), kDim);
-  m_r.Text(m_r.brush, kb ? "TECLADO" : "MANDO", IX(px + 44), IY(py + 42), IS(52), kWhite);
+  m_r.Text(m_r.ui, L("OPCIONES  ·  CONTROLES", "OPTIONS  ·  CONTROLS"), IX(px + 48), IY(py + 18), IS(22), kDim);
+  m_r.Text(m_r.brush, kb ? L("TECLADO", "KEYBOARD") : L("MANDO", "CONTROLLER"), IX(px + 44), IY(py + 42), IS(52), kWhite);
   m_r.TextCentered(m_r.kanji, "操", IX(px + pw - 80), IY(py + 70), IS(84), {0.6f, 0.04f, 0.04f, 0.45f});
 
   // Estilo de los iconos del mando: el elegido en Opciones o el del mando conectado.
@@ -3180,7 +3374,7 @@ void App::RenderRemap()
     if (waiting)
     {
       const float pulse = 0.6f + 0.4f * std::sin(m_time * 8.0f);
-      const std::string msg = std::string(kb ? "Pulsa una tecla" : "Pulsa un botón") + "… (" +
+      const std::string msg = std::string(kb ? L("Pulsa una tecla", "Press a key") : L("Pulsa un botón", "Press a button")) + "… (" +
                               std::to_string(static_cast<int>(std::ceil(m_remap_timer))) + ")";
       m_r.Text(m_r.ui, msg, rr.x + rr.w - IS(20), rr.y + IS(10), IS(24), WithAlpha(kGold, pulse), Align::Right);
     }
@@ -3201,7 +3395,7 @@ void App::RenderRemap()
     });
   }
 
-  const char* extra[2] = {"Restaurar por defecto", "Volver"};
+  const char* extra[2] = {L("Restaurar por defecto", "Restore defaults"), L("Volver", "Back")};
   for (int k = 0; k < 2; k++)
   {
     const int i = kPsButtons + k;
@@ -3220,20 +3414,24 @@ void App::RenderRemap()
 
   std::string help;
   if (m_remap_wait >= 0)
-    help = kb ? "Pulsa la tecla nueva. Esc cancela. Las teclas F y Esc están reservadas."
-              : "Pulsa el botón nuevo en el mando. Esc o un clic cancelan.";
+    help = kb ? L("Pulsa la tecla nueva. Esc cancela. Las teclas F y Esc están reservadas.",
+                  "Press the new key. Esc cancels. The F keys and Esc are reserved.")
+              : L("Pulsa el botón nuevo en el mando. Esc o un clic cancelan.",
+                  "Press the new button on the controller. Esc or a click cancels.");
   else
-    help = "Elige un botón y pulsa Aceptar para cambiarlo. Si la tecla ya la usa otro botón, se intercambian. "
-           "Los menús del launcher siempre se manejan con las flechas, Enter y Esc (o cruceta, A y B).";
+    help = L("Elige un botón y pulsa Aceptar para cambiarlo. Si la tecla ya la usa otro botón, se intercambian. "
+             "Los menús del launcher siempre se manejan con las flechas, Enter y Esc (o cruceta, A y B).",
+             "Choose a button and press Accept to change it. If another button already uses that key, they are "
+             "swapped. The launcher menus are always driven with the arrows, Enter and Esc (or D-pad, A and B).");
   if (!kb && !m_pad)
-    help += "\nNo hay ningún mando conectado.";
+    help += L("\nNo hay ningún mando conectado.", "\nNo controller connected.");
   float ly = y0 + 10 * rh + 50;
   for (const std::string& line : Wrap(m_r.ui, help, IS(23), IS(pw - 90)))
   {
     m_r.Text(m_r.ui, line, IX(px + 48), IY(ly), IS(23), {0.84f, 0.81f, 0.78f, 0.95f});
     ly += 31;
   }
-  RenderHints({{PsButton::Accept, "Cambiar"}, {PsButton::Back, "Volver"}}, m_w - IS(28), m_h - IS(58));
+  RenderHints({{PsButton::Accept, L("Cambiar", "Change")}, {PsButton::Back, L("Volver", "Back")}}, m_w - IS(28), m_h - IS(58));
 }
 
 void App::RenderCheats()
@@ -3241,27 +3439,29 @@ void App::RenderCheats()
   DimScreen(0.5f);
   const float px = 40, py = 56, pw = 900, ph = 950;
   Panel(px, py, pw, ph);
-  m_r.Text(m_r.ui, "OPCIONES", IX(px + 48), IY(py + 18), IS(22), kDim);
-  m_r.Text(m_r.brush, "TRUCOS", IX(px + 44), IY(py + 42), IS(52), kWhite);
+  m_r.Text(m_r.ui, L("OPCIONES", "OPTIONS"), IX(px + 48), IY(py + 18), IS(22), kDim);
+  m_r.Text(m_r.brush, L("TRUCOS", "CHEATS"), IX(px + 44), IY(py + 42), IS(52), kWhite);
   m_r.TextCentered(m_r.kanji, "術", IX(px + pw - 80), IY(py + 70), IS(84), {0.6f, 0.04f, 0.04f, 0.45f});
 
   const int n = static_cast<int>(m_cheat_list.size());
   int active = 0;
   for (const Cheat& c : m_cheat_list)
     active += CheatEnabled(c.name);
-  const std::string state = n == 0 ? "" : active == 0 ? "Ningún truco activo"
-                                                       : std::to_string(active) + (active == 1 ? " truco activo"
-                                                                                               : " trucos activos");
+  const std::string state = n == 0 ? "" : active == 0 ? L("Ningún truco activo", "No cheats active")
+                                                       : std::to_string(active) + (active == 1 ? L(" truco activo", " cheat active")
+                                                                                               : L(" trucos activos", " cheats active"));
   m_r.Text(m_r.ui, state, IX(px + pw - 40), IY(py + 118), IS(22), active ? kGold : kDim, Align::Right);
-  m_r.Text(m_r.ui, active ? "Los logros se pausarán en la próxima partida." : "Se aplican al iniciar la partida.",
+  m_r.Text(m_r.ui, active ? L("Los logros se pausarán en la próxima partida.", "Achievements will be paused in the next game.") : L("Se aplican al iniciar la partida.", "They apply when the game starts."),
            IX(px + 48), IY(py + 118), IS(22), active ? Color{1.0f, 0.75f, 0.3f, 0.95f} : kDim);
 
   const float top = py + 160, view_h = 560, rh = 56;
   if (n == 0)
   {
     for (const std::string& line : Wrap(m_r.ui,
-                                        "No hay trucos disponibles para este disco. Hay trucos para las versiones de "
-                                        "Tenchu 2 de España, Europa, Alemania, EE. UU. y Japón.",
+                                        L("No hay trucos disponibles para este disco. Hay trucos para las versiones de "
+                                          "Tenchu 2 de España, Europa, Alemania, EE. UU. y Japón.",
+                                          "No cheats available for this disc. There are cheats for the Spanish, "
+                                          "European, German, US and Japanese versions of Tenchu 2."),
                                         IS(26), IS(pw - 100)))
     {
       m_r.Text(m_r.ui, line, IX(px + 52), IY(top), IS(26), kGrey);
@@ -3279,8 +3479,8 @@ void App::RenderCheats()
     if (sel)
       m_r.Sprite(m_btn_sel, rr.x - IS(10), rr.y - IS(7), rr.w + IS(20), rr.h + IS(14), {1, 1, 1, 0.95f});
     const Color lc = sel ? Color{1, 0.98f, 0.96f, 1} : on ? kWhite : Color{0.8f, 0.78f, 0.76f, 1};
-    FitText(m_r.ui, c.label, rr.x + IS(30), rr.y + IS(8), rr.w - IS(200), IS(27), lc, Align::Left, sel, 30000 + i);
-    m_r.Text(m_r.ui, on ? "Activado" : "No", rr.x + rr.w - IS(26), rr.y + IS(9), IS(25),
+    FitText(m_r.ui, c.Label(), rr.x + IS(30), rr.y + IS(8), rr.w - IS(200), IS(27), lc, Align::Left, sel, 30000 + i);
+    m_r.Text(m_r.ui, on ? L("Activado", "On") : "No", rr.x + rr.w - IS(26), rr.y + IS(9), IS(25),
              on ? kGold : Color{0.6f, 0.58f, 0.56f, 1}, Align::Right);
     Hot(rr, 8, i, [this, i](float, float) {
       m_cheat_sel = i;
@@ -3289,7 +3489,7 @@ void App::RenderCheats()
   }
   m_r.ClearClip();
 
-  const char* extra[2] = {"Desactivar todos", "Volver"};
+  const char* extra[2] = {L("Desactivar todos", "Disable all"), L("Volver", "Back")};
   for (int k = 0; k < 2; k++)
   {
     const int i = n + k;
@@ -3305,9 +3505,9 @@ void App::RenderCheats()
       Accept();
     });
   }
-  m_r.Text(m_r.ui, "Trucos de la base de datos comunitaria de DuckStation (chtdb).", IX(px + 48), IY(py + ph - 60),
+  m_r.Text(m_r.ui, L("Trucos de la base de datos comunitaria de DuckStation (chtdb).", "Cheats from DuckStation's community database (chtdb)."), IX(px + 48), IY(py + ph - 60),
            IS(19), kDim);
-  RenderHints({{PsButton::Accept, "Activar / desactivar"}, {PsButton::Back, "Volver"}}, m_w - IS(28), m_h - IS(58));
+  RenderHints({{PsButton::Accept, L("Activar / desactivar", "Toggle")}, {PsButton::Back, L("Volver", "Back")}}, m_w - IS(28), m_h - IS(58));
 }
 
 void App::RenderCredits()
@@ -3315,7 +3515,7 @@ void App::RenderCredits()
   DimScreen(0.55f);
   const float px = 40, py = 56, pw = 1100, ph = 950;
   Panel(px, py, pw, ph);
-  m_r.Text(m_r.brush, "CRÉDITOS", IX(px + 44), IY(py + 20), IS(56), kWhite);
+  m_r.Text(m_r.brush, L("CRÉDITOS", "CREDITS"), IX(px + 44), IY(py + 20), IS(56), kWhite);
   m_r.TextCentered(m_r.kanji, "忍", IX(px + pw - 80), IY(py + 66), IS(84), {0.6f, 0.04f, 0.04f, 0.45f});
 
   struct Line
@@ -3325,19 +3525,19 @@ void App::RenderCredits()
   };
   std::vector<Line> lines = {
     {2, "KAGE NO MON", ""},
-    {3, std::string("La Puerta de las Sombras  ·  ") + kVersion, ""},
-    {0, "PROYECTO", ""},
-    {1, "daetrox", "Idea, dirección, diseño e ilustración del launcher"},
-    {1, "Claude (Anthropic)", "Programación, en colaboración con daetrox"},
-    {1, "Composición original", "Música y efectos de sonido (koto, shakuhachi y taiko)"},
-    {0, "EMULACIÓN", ""},
-    {1, "SwanStation", "Núcleo de PlayStation para libretro, derivado de DuckStation  ·  GPL-3.0"},
-    {1, "Connor McLaughlin (stenzek) y colaboradores", "Autores de DuckStation, base de SwanStation"},
-    {1, "OpenBIOS", "BIOS libre de PCSX-Redux  ·  autores de PCSX-Redux  ·  MIT"},
-    {1, "libretro", "API de núcleos de emulación  ·  equipo de libretro"},
-    {0, "LOGROS", ""},
-    {1, "RetroAchievements.org", "Plataforma y base de datos de logros"},
-    {1, "rcheevos", "Biblioteca de logros de RetroAchievements  ·  MIT"},
+    {3, std::string(L("La Puerta de las Sombras  ·  ", "The Gate of Shadows  ·  ")) + kVersion, ""},
+    {0, L("PROYECTO", "PROJECT"), ""},
+    {1, "daetrox", L("Idea, dirección, diseño e ilustración del launcher", "Launcher idea, direction, design and artwork")},
+    {1, "Claude (Anthropic)", L("Programación, en colaboración con daetrox", "Programming, in collaboration with daetrox")},
+    {1, L("Composición original", "Original composition"), L("Música y efectos de sonido (koto, shakuhachi y taiko)", "Music and sound effects (koto, shakuhachi and taiko)")},
+    {0, L("EMULACIÓN", "EMULATION"), ""},
+    {1, "SwanStation", L("Núcleo de PlayStation para libretro, derivado de DuckStation  ·  GPL-3.0", "PlayStation core for libretro, derived from DuckStation  ·  GPL-3.0")},
+    {1, L("Connor McLaughlin (stenzek) y colaboradores", "Connor McLaughlin (stenzek) and contributors"), L("Autores de DuckStation, base de SwanStation", "Authors of DuckStation, the basis of SwanStation")},
+    {1, "OpenBIOS", L("BIOS libre de PCSX-Redux  ·  autores de PCSX-Redux  ·  MIT", "Free BIOS from PCSX-Redux  ·  PCSX-Redux authors  ·  MIT")},
+    {1, "libretro", L("API de núcleos de emulación  ·  equipo de libretro", "Emulation core API  ·  libretro team")},
+    {0, L("LOGROS", "ACHIEVEMENTS"), ""},
+    {1, "RetroAchievements.org", L("Plataforma y base de datos de logros", "Achievement platform and database")},
+    {1, "rcheevos", L("Biblioteca de logros de RetroAchievements  ·  MIT", "RetroAchievements achievement library  ·  MIT")},
   };
   if (m_ach.GetState() == Achievements::State::Ready)
   {
@@ -3345,27 +3545,27 @@ void App::RenderCredits()
     for (const std::string& a : m_ach.Authors())
       authors += (authors.empty() ? "" : ", ") + a;
     if (!authors.empty())
-      lines.push_back({1, authors, "Autoría del set de logros de " + m_ach.GameTitle()});
+      lines.push_back({1, authors, L("Autoría del set de logros de ", "Achievement set for ") + m_ach.GameTitle()});
   }
   const std::vector<Line> rest = {
-    {0, "PANTALLA PANORÁMICA", ""},
-    {1, "El_Patas y PeterDelta", "Parche 16:9 nativo  ·  base de datos chtdb de DuckStation"},
-    {0, "TRUCOS", ""},
-    {1, "Comunidad de chtdb (DuckStation)", "Códigos de trucos de Tenchu 2, de sus respectivos autores"},
-    {0, "BIBLIOTECAS", ""},
-    {1, "SDL2", "Sam Lantinga y colaboradores  ·  zlib"},
-    {1, "stb_truetype, stb_image, stb_vorbis", "Sean Barrett  ·  dominio público"},
-    {0, "TIPOGRAFÍAS", ""},
+    {0, L("PANTALLA PANORÁMICA", "WIDESCREEN"), ""},
+    {1, L("El_Patas y PeterDelta", "El_Patas and PeterDelta"), L("Parche 16:9 nativo  ·  base de datos chtdb de DuckStation", "Native 16:9 patch  ·  DuckStation's chtdb database")},
+    {0, L("TRUCOS", "CHEATS"), ""},
+    {1, L("Comunidad de chtdb (DuckStation)", "chtdb community (DuckStation)"), L("Códigos de trucos de Tenchu 2, de sus respectivos autores", "Tenchu 2 cheat codes, by their respective authors")},
+    {0, L("BIBLIOTECAS", "LIBRARIES"), ""},
+    {1, "SDL2", L("Sam Lantinga y colaboradores  ·  zlib", "Sam Lantinga and contributors  ·  zlib")},
+    {1, "stb_truetype, stb_image, stb_vorbis", L("Sean Barrett  ·  dominio público", "Sean Barrett  ·  public domain")},
+    {0, L("TIPOGRAFÍAS", "TYPEFACES"), ""},
     {1, "Permanent Marker", "Font Diner  ·  Apache 2.0"},
     {1, "Oswald", "The Oswald Project Authors  ·  SIL OFL 1.1"},
     {1, "Shojumaru", "Astigmatic (Brian J. Bonislawsky)  ·  SIL OFL 1.1"},
-    {1, "Kaushan Script", "Pablo Impallari e Igino Marini  ·  SIL OFL 1.1"},
+    {1, "Kaushan Script", L("Pablo Impallari e Igino Marini  ·  SIL OFL 1.1", "Pablo Impallari and Igino Marini  ·  SIL OFL 1.1")},
     {1, "Yuji Syuku", "The Yuji Project Authors (Kinuta Font Factory)  ·  SIL OFL 1.1"},
-    {0, "CON RESPETO A", ""},
-    {1, "Acquire y Activision", "Creadores de Tenchu 2: Birth of the Stealth Assassins (2000)"},
-    {3, "Tenchu es una marca registrada de sus respectivos propietarios.", ""},
-    {3, "Este proyecto no está afiliado a ellos.", ""},
-    {3, "Software libre (GPL-3.0)  ·  sin fines de lucro", ""},
+    {0, L("CON RESPETO A", "WITH RESPECT TO"), ""},
+    {1, L("Acquire y Activision", "Acquire and Activision"), L("Creadores de Tenchu 2: Birth of the Stealth Assassins (2000)", "Creators of Tenchu 2: Birth of the Stealth Assassins (2000)")},
+    {3, L("Tenchu es una marca registrada de sus respectivos propietarios.", "Tenchu is a registered trademark of its respective owners."), ""},
+    {3, L("Este proyecto no está afiliado a ellos.", "This project is not affiliated with them."), ""},
+    {3, L("Software libre (GPL-3.0)  ·  sin fines de lucro", "Free software (GPL-3.0)  ·  non-profit"), ""},
   };
   lines.insert(lines.end(), rest.begin(), rest.end());
 
@@ -3409,7 +3609,7 @@ void App::RenderCredits()
     m_r.Rect(IX(px + 10), IY(bottom - (k + 1) * 4), IS(pw - 20), IS(4), UiMode::Solid,
              {0.035f, 0.025f, 0.025f, a});
   }
-  RenderHints({{PsButton::Back, "Volver"}}, IX(px + pw - 30), IY(py + ph - 64));
+  RenderHints({{PsButton::Back, L("Volver", "Back")}}, IX(px + pw - 30), IY(py + ph - 64));
 }
 
 void App::RenderConfirmReset()
@@ -3417,18 +3617,21 @@ void App::RenderConfirmReset()
   DimScreen(0.6f);
   const float x = 450, y = 300, w = 680, h = 470;
   Panel(x, y, w, h);
-  m_r.Text(m_r.brush, "REINICIAR LOGROS", IX(x + 44), IY(y + 24), IS(44), kWhite);
+  m_r.Text(m_r.brush, L("REINICIAR LOGROS", "RESET ACHIEVEMENTS"), IX(x + 44), IY(y + 24), IS(44), kWhite);
   const int n = m_ach.EarnedCount();
-  const std::string msg = (n == 1 ? std::string("Se borrará el logro desbloqueado")
-                                  : "Se borrarán los " + std::to_string(n) + " logros desbloqueados") +
-                          " en este equipo. No se puede deshacer.";
+  const std::string msg =
+    LangEn() ? (n == 1 ? std::string("The unlocked achievement") : "The " + std::to_string(n) + " unlocked achievements") +
+                 " on this computer will be deleted. This cannot be undone."
+             : (n == 1 ? std::string("Se borrará el logro desbloqueado")
+                       : "Se borrarán los " + std::to_string(n) + " logros desbloqueados") +
+                 " en este equipo. No se puede deshacer.";
   float ty = y + 96;
   for (const std::string& line : Wrap(m_r.ui, msg, IS(25), IS(w - 90)))
   {
     m_r.Text(m_r.ui, line, IX(x + 46), IY(ty), IS(25), kGrey);
     ty += 34;
   }
-  const char* labels[2] = {"REINICIAR", "CANCELAR"};
+  const char* labels[2] = {L("REINICIAR", "RESET"), L("CANCELAR", "CANCEL")};
   const Texture* icons[2] = {&m_ic_ach, &m_ic_quit};
   for (int i = 0; i < 2; i++)
   {
@@ -3439,7 +3642,7 @@ void App::RenderConfirmReset()
       Accept();
     });
   }
-  RenderHints({{PsButton::Accept, "Aceptar"}, {PsButton::Back, "Cancelar"}}, IX(x + w - 30), IY(y + h + 16));
+  RenderHints({{PsButton::Accept, L("Aceptar", "Accept")}, {PsButton::Back, L("Cancelar", "Cancel")}}, IX(x + w - 30), IY(y + h + 16));
 }
 
 void App::RenderControls()
@@ -3447,7 +3650,7 @@ void App::RenderControls()
   DimScreen(m_emu.IsRunning() ? 0.75f : 0.5f);
   const float px = 40, py = 56, pw = 1060, ph = 950;
   Panel(px, py, pw, ph);
-  m_r.Text(m_r.brush, "CONTROLES", IX(px + 44), IY(py + 20), IS(56), kWhite);
+  m_r.Text(m_r.brush, L("CONTROLES", "CONTROLS"), IX(px + 44), IY(py + 20), IS(56), kWhite);
 
   struct Row
   {
@@ -3455,15 +3658,15 @@ void App::RenderControls()
     PsButton b;
   };
   const Row rows[] = {
-    {"Moverse", PsButton::LStick}, {"Cruceta", PsButton::DPad},      {"Cruz", PsButton::Cross},
-    {"Círculo", PsButton::Circle}, {"Cuadrado", PsButton::Square},   {"Triángulo", PsButton::Triangle},
+    {L("Moverse", "Move"), PsButton::LStick}, {L("Cruceta", "D-pad"), PsButton::DPad},      {L("Cruz", "Cross"), PsButton::Cross},
+    {L("Círculo", "Circle"), PsButton::Circle}, {L("Cuadrado", "Square"), PsButton::Square},   {L("Triángulo", "Triangle"), PsButton::Triangle},
     {"L1", PsButton::L1},          {"R1", PsButton::R1},             {"L2", PsButton::L2},
     {"R2", PsButton::R2},          {"Start", PsButton::Start},       {"Select", PsButton::Select},
-    {"Pausa del launcher", PsButton::Pause},
+    {L("Pausa del launcher", "Launcher pause"), PsButton::Pause},
   };
   const float c0 = px + 52, c1 = px + 430, c2 = px + 650, c3 = px + 860;
-  m_r.Text(m_r.ui, "BOTÓN DE PS1", IX(c0), IY(py + 104), IS(23), kDim);
-  m_r.Text(m_r.ui, "TECLADO", IX(c1), IY(py + 104), IS(23), kDim);
+  m_r.Text(m_r.ui, L("BOTÓN DE PS1", "PS1 BUTTON"), IX(c0), IY(py + 104), IS(23), kDim);
+  m_r.Text(m_r.ui, L("TECLADO", "KEYBOARD"), IX(c1), IY(py + 104), IS(23), kDim);
   m_r.Text(m_r.ui, "XBOX", IX(c2), IY(py + 104), IS(23), kDim);
   m_r.Text(m_r.ui, "PLAYSTATION", IX(c3), IY(py + 104), IS(23), kDim);
   float y = py + 146;
@@ -3476,16 +3679,17 @@ void App::RenderControls()
     y += 54;
   }
   m_r.Text(m_r.ui,
-           m_cfg.hardcore ? "F11 pantalla completa  ·  modo hardcore: sin F5 / F7"
-                          : "F5 guardar · F7 cargar · F11 pantalla completa",
+           m_cfg.hardcore ? L("F11 pantalla completa  ·  modo hardcore: sin F5 / F7", "F11 fullscreen  ·  hardcore mode: no F5 / F7")
+                          : L("F5 guardar · F7 cargar · F11 pantalla completa", "F5 save · F7 load · F11 fullscreen"),
            IX(c0), IY(y + 14), IS(22), kDim);
   if (m_cfg.free_camera && !m_cfg.hardcore)
     m_r.Text(m_r.ui,
-             m_cfg.kb_mouse ? "Ratón / joystick derecho: cámara libre  ·  R / R3: cámara del juego  ·  Clic central / L3: "
-                              "fijar enemigo"
-                            : "Joystick derecho: cámara libre  ·  R3: cámara del juego  ·  L3: fijar enemigo",
+             m_cfg.kb_mouse ? L("Ratón / joystick derecho: cámara libre  ·  R / R3: cámara del juego  ·  Clic central / L3: "
+                                "fijar enemigo",
+                                "Mouse / right stick: free camera  ·  R / R3: game camera  ·  Middle click / L3: lock on")
+                            : L("Joystick derecho: cámara libre  ·  R3: cámara del juego  ·  L3: fijar enemigo", "Right stick: free camera  ·  R3: game camera  ·  L3: lock on"),
              IX(c0), IY(y + 44), IS(22), kDim);
-  RenderHints({{PsButton::Back, "Volver"}}, IX(px + pw - 30), IY(py + ph - 64));
+  RenderHints({{PsButton::Back, L("Volver", "Back")}}, IX(px + pw - 30), IY(py + ph - 64));
 }
 
 void App::RenderAchievements()
@@ -3494,7 +3698,7 @@ void App::RenderAchievements()
   const float px = 40, py = 56, pw = 1100, ph = 950;
   Panel(px, py, pw, ph);
   m_r.Sprite(m_ic_ach, IX(px + 40), IY(py + 22), IS(62), IS(62), kWhite);
-  m_r.Text(m_r.brush, "LOGROS", IX(px + 116), IY(py + 20), IS(56), kWhite);
+  m_r.Text(m_r.brush, L("LOGROS", "ACHIEVEMENTS"), IX(px + 116), IY(py + 20), IS(56), kWhite);
 
   const Achievements::State st = m_ach.GetState();
   if (st == Achievements::State::Ready)
@@ -3503,11 +3707,11 @@ void App::RenderAchievements()
     const int earned = m_ach.EarnedCount();
     m_r.Text(m_r.ui, Truncate(m_r.ui, m_ach.GameTitle(), IS(26), IS(pw - 420)), IX(px + pw - 40), IY(py + 24), IS(26),
              kGrey, Align::Right);
-    const std::string prog = std::string(m_cfg.hardcore ? "Modo hardcore  ·  " : "") + std::to_string(earned) +
-                             " de " + std::to_string(list.size()) + " logros (" +
-                             std::to_string(m_ach.HardcoreCount()) + " hardcore)  ·  " +
-                             std::to_string(m_ach.EarnedPoints()) + " / " + std::to_string(m_ach.TotalPoints()) +
-                             " puntos";
+    const std::string prog = std::string(m_cfg.hardcore ? L("Modo hardcore  ·  ", "Hardcore mode  ·  ") : "") +
+                             std::to_string(earned) + L(" de ", " of ") + std::to_string(list.size()) +
+                             L(" logros (", " achievements (") + std::to_string(m_ach.HardcoreCount()) +
+                             " hardcore)  ·  " + std::to_string(m_ach.EarnedPoints()) + " / " +
+                             std::to_string(m_ach.TotalPoints()) + L(" puntos", " points");
     m_r.Text(m_r.ui, prog, IX(px + pw - 40), IY(py + 60), IS(24), kGold, Align::Right);
     const float bx = px + 44, by = py + 104, bw = pw - 88, bh = 10;
     m_r.Rect(IX(bx), IY(by), IS(bw), IS(bh), UiMode::Solid, {1, 1, 1, 0.1f});
@@ -3535,18 +3739,18 @@ void App::RenderAchievements()
         m_r.Rect(rr.x + IS(10), rr.y + IS(8), isz, isz, UiMode::Solid, {0.2f, 0.2f, 0.2f, 1});
       const Color tc = a.unlocked ? kWhite : Color{0.72f, 0.7f, 0.68f, 1};
       const float text_w = rr.w - IS(92) - IS(150);
-      FitText(m_r.ui, a.title, rr.x + IS(92), rr.y + IS(4), text_w, IS(27), tc, Align::Left, sel,
+      FitText(m_r.ui, a.Title(), rr.x + IS(92), rr.y + IS(4), text_w, IS(27), tc, Align::Left, sel,
               10000 + static_cast<int>(i) * 2);
-      FitText(m_r.ui, a.description, rr.x + IS(92), rr.y + IS(42), text_w, IS(21), kDim, Align::Left, sel,
+      FitText(m_r.ui, a.Description(), rr.x + IS(92), rr.y + IS(42), text_w, IS(21), kDim, Align::Left, sel,
               10000 + static_cast<int>(i) * 2 + 1);
       m_r.Text(m_r.ui, std::to_string(a.points) + " pts", rr.x + rr.w - IS(20), rr.y + IS(8), IS(23),
                a.unlocked ? kGold : kDim, Align::Right);
-      std::string when = "Bloqueado";
+      std::string when = L("Bloqueado", "Locked");
       if (a.unlocked)
       {
         char date[32];
         const time_t t = static_cast<time_t>(a.unlock_time);
-        std::strftime(date, sizeof(date), "%d/%m/%Y", std::localtime(&t));
+        std::strftime(date, sizeof(date), L("%d/%m/%Y", "%m/%d/%Y"), std::localtime(&t));
         when = std::string(a.hardcore ? "Hardcore · " : "") + date;
       }
       m_r.Text(m_r.ui, when, rr.x + rr.w - IS(20), rr.y + IS(44), IS(19), kDim, Align::Right);
@@ -3564,8 +3768,8 @@ void App::RenderAchievements()
         else
           m_r.Rect(rr.x, rr.y, rr.w, rr.h, UiMode::Solid, {0.4f, 0.03f, 0.02f, 0.25f});
         m_r.DrawIcon(Icon::Close, rr.x + IS(30), rr.y + IS(24), IS(32), sel ? kWhite : kRed);
-        m_r.Text(m_r.ui, "Reiniciar mis logros", rr.x + IS(92), rr.y + IS(4), IS(27), sel ? kWhite : kGrey);
-        m_r.Text(m_r.ui, "Borra los logros desbloqueados en este equipo (pide confirmación).", rr.x + IS(92),
+        m_r.Text(m_r.ui, L("Reiniciar mis logros", "Reset my achievements"), rr.x + IS(92), rr.y + IS(4), IS(27), sel ? kWhite : kGrey);
+        m_r.Text(m_r.ui, L("Borra los logros desbloqueados en este equipo (pide confirmación).", "Deletes the achievements unlocked on this computer (asks for confirmation)."), rr.x + IS(92),
                  rr.y + IS(42), IS(21), sel ? Color{1, 0.9f, 0.85f, 1} : kDim);
         Hot(rr, 6, static_cast<int>(n), [this, n](float, float) {
           m_ach_sel = static_cast<int>(n);
@@ -3574,9 +3778,9 @@ void App::RenderAchievements()
       }
     }
     m_r.ClearClip();
-    m_r.Text(m_r.ui, "Los logros se desbloquean sin conexión y se guardan sólo en este equipo.", IX(px + 44),
+    m_r.Text(m_r.ui, L("Los logros se desbloquean sin conexión y se guardan sólo en este equipo.", "Achievements unlock offline and are saved only on this computer."), IX(px + 44),
              IY(py + ph - 58), IS(21), kDim);
-    RenderHints({{PsButton::Back, "Volver"}}, IX(px + pw - 30), IY(py + ph - 64));
+    RenderHints({{PsButton::Back, L("Volver", "Back")}}, IX(px + pw - 30), IY(py + ph - 64));
     return;
   }
 
@@ -3587,7 +3791,7 @@ void App::RenderAchievements()
     m_r.Text(m_r.ui, line, IX(px + 52), IY(y), IS(27), st == Achievements::State::Working ? kGold : kGrey);
     y += 38;
   }
-  RenderHints({{PsButton::Back, "Volver"}}, IX(px + pw - 30), IY(py + ph - 64));
+  RenderHints({{PsButton::Back, L("Volver", "Back")}}, IX(px + pw - 30), IY(py + ph - 64));
   if (st == Achievements::State::Working)
   {
     m_r.DrawIcon(Icon::Shuriken, IX(px + pw / 2 - 45), IY(py + 420), IS(90), kRed, 3.0f);
@@ -3596,8 +3800,8 @@ void App::RenderAchievements()
   if (st != Achievements::State::NeedLogin)
     return;
 
-  m_r.Text(m_r.ui, "Cuenta de RetroAchievements (retroachievements.org)", IX(px + 52), IY(y + 24), IS(26), kWhite);
-  const char* labels[2] = {"Usuario", "Contraseña"};
+  m_r.Text(m_r.ui, L("Cuenta de RetroAchievements (retroachievements.org)", "RetroAchievements account (retroachievements.org)"), IX(px + 52), IY(y + 24), IS(26), kWhite);
+  const char* labels[2] = {L("Usuario", "Username"), L("Contraseña", "Password")};
   for (int i = 0; i < 2; i++)
   {
     const float fy = y + 76 + i * 104;
@@ -3618,14 +3822,14 @@ void App::RenderAchievements()
     Hot(field, 4, i, [this, i](float, float) { m_login_focus = i; });
   }
   const Rect slot = {px + 46, y + 300, 462, 88};
-  DrawMenuButton(slot, "DESCARGAR", &m_ic_ach, m_sel_anim[2], 34, true);
+  DrawMenuButton(slot, L("DESCARGAR", "DOWNLOAD"), &m_ic_ach, m_sel_anim[2], 34, true);
   Hot(IR(slot), 4, 2, [this](float, float) {
     m_login_focus = 2;
     StartLogin();
   });
   float ny = y + 420;
-  for (const char* line : {"Tu contraseña sólo se usa para obtener un token de acceso y no se guarda.",
-                           "Los logros se descargan una vez; después se juegan y desbloquean sin conexión."})
+  for (const char* line : {L("Tu contraseña sólo se usa para obtener un token de acceso y no se guarda.", "Your password is only used to obtain an access token and is not stored."),
+                           L("Los logros se descargan una vez; después se juegan y desbloquean sin conexión.", "Achievements are downloaded once; after that they are played and unlocked offline.")})
   {
     m_r.Text(m_r.ui, line, IX(px + 52), IY(ny), IS(21), kDim);
     ny += 32;
@@ -3676,9 +3880,11 @@ void App::RenderPause()
   DimScreen(0.62f);
   const float px = 50, py = 90, pw = 620, ph = 860;
   Panel(px, py, pw, ph);
-  m_r.Text(m_r.brush, "PAUSA", IX(px + 44), IY(py + 24), IS(60), kWhite);
+  m_r.Text(m_r.brush, L("PAUSA", "PAUSE"), IX(px + 44), IY(py + 24), IS(60), kWhite);
   m_r.Text(m_r.kanji, "闇", IX(px + pw - 120), IY(py + 20), IS(86), {0.6f, 0.04f, 0.04f, 0.35f});
-  const char* labels[kPauseItems] = {"REANUDAR", "GUARDAR", "CARGAR", "CONTROLES", "MENÚ PRINCIPAL", "SALIR"};
+  const char* labels[kPauseItems] = {L("REANUDAR", "RESUME"),   L("GUARDAR", "SAVE"),
+                                     L("CARGAR", "LOAD"),       L("CONTROLES", "CONTROLS"),
+                                     L("MENÚ PRINCIPAL", "MAIN MENU"), L("SALIR", "QUIT")};
   const Texture* icons[kPauseItems] = {&m_ic_play, &m_ic_ach, &m_ic_ach, &m_ic_opt, &m_ic_opt, &m_ic_quit};
   for (int i = 0; i < kPauseItems; i++)
   {
@@ -3688,16 +3894,16 @@ void App::RenderPause()
     Hot(IR(slot), 2, i, [this, i](float, float) { ActivatePause(i); });
   }
   if (m_cheats_active)
-    m_r.Text(m_r.ui, "Logros en pausa: hay trucos activos", IX(px + 70), IY(py + ph - 64), IS(24), kDim);
+    m_r.Text(m_r.ui, L("Logros en pausa: hay trucos activos", "Achievements paused: cheats are active"), IX(px + 70), IY(py + ph - 64), IS(24), kDim);
   else if (m_ach.GetState() == Achievements::State::Ready)
     m_r.Text(m_r.ui,
-             std::string(m_hardcore_session ? "MODO HARDCORE  ·  " : "") + "Logros: " +
+             std::string(m_hardcore_session ? L("MODO HARDCORE  ·  ", "HARDCORE MODE  ·  ") : "") + L("Logros: ", "Achievements: ") +
                std::to_string(m_hardcore_session ? m_ach.HardcoreCount() : m_ach.EarnedCount()) + " / " +
                std::to_string(m_ach.List().size()),
              IX(px + 70), IY(py + ph - 64), IS(24), kGold);
   else if (m_hardcore_session)
-    m_r.Text(m_r.ui, "MODO HARDCORE", IX(px + 70), IY(py + ph - 64), IS(24), kGold);
-  RenderHints({{PsButton::Accept, "Aceptar"}, {PsButton::Back, "Reanudar"}}, m_w - IS(30), m_h - IS(60));
+    m_r.Text(m_r.ui, L("MODO HARDCORE", "HARDCORE MODE"), IX(px + 70), IY(py + ph - 64), IS(24), kGold);
+  RenderHints({{PsButton::Accept, L("Aceptar", "Accept")}, {PsButton::Back, L("Reanudar", "Resume")}}, m_w - IS(30), m_h - IS(60));
 }
 
 void App::RenderDialog()
@@ -3713,7 +3919,7 @@ void App::RenderDialog()
     m_r.Text(m_r.ui, line, IX(x + 46), IY(ty), IS(27), kWhite);
     ty += 38;
   }
-  RenderHints({{PsButton::Accept, "Aceptar"}}, IX(x + w - 40), IY(y + h - 66));
+  RenderHints({{PsButton::Accept, L("Aceptar", "Accept")}}, IX(x + w - 40), IY(y + h - 66));
 }
 
 void App::RenderToast()
@@ -3746,8 +3952,8 @@ void App::RenderPopups()
     m_ach.LoadIcon(*a, m_r);
     if (a->icon.id)
       m_r.Sprite(a->icon, x + IS(22), y + IS(19), IS(80), IS(80), {1, 1, 1, alpha});
-    m_r.Text(m_r.ui, "¡Logro desbloqueado!", x + IS(122), y + IS(14), IS(23), WithAlpha(kGold, alpha));
-    m_r.Text(m_r.ui, Truncate(m_r.ui, a->title, IS(29), w - IS(230)), x + IS(122), y + IS(46), IS(29),
+    m_r.Text(m_r.ui, L("¡Logro desbloqueado!", "Achievement unlocked!"), x + IS(122), y + IS(14), IS(23), WithAlpha(kGold, alpha));
+    m_r.Text(m_r.ui, Truncate(m_r.ui, a->Title(), IS(29), w - IS(230)), x + IS(122), y + IS(46), IS(29),
              WithAlpha(kWhite, alpha));
     m_r.Text(m_r.ui, std::to_string(a->points) + " pts", x + w - IS(22), y + IS(14), IS(23), WithAlpha(kGold, alpha),
              Align::Right);
@@ -3769,6 +3975,23 @@ int App::Run(int argc, char** argv)
   }
 
   m_cfg.Load();
+  // Idioma: el elegido en el selector o, si no se ha elegido nunca, el del sistema.
+  {
+    bool en = m_cfg.language == "en";
+    if (m_cfg.language.empty())
+    {
+      en = true;
+      if (SDL_Locale* locales = SDL_GetPreferredLocales())
+      {
+        if (locales[0].language)
+          en = std::strcmp(locales[0].language, "es") != 0;
+        SDL_free(locales);
+      }
+    }
+    if (const char* test = std::getenv("TENSHU_TEST_LANG")) // pruebas: "es" o "en"
+      en = std::strcmp(test, "en") == 0;
+    I18n::Current() = en ? Lang::En : Lang::Es;
+  }
   if (m_cfg.game_path.empty() || !Paths::FileExists(m_cfg.game_path))
   {
     const std::string found = AutoDetectGame();
@@ -3998,6 +4221,7 @@ int App::Run(int argc, char** argv)
         m_remap_timer = 4.2f;
       }
       if (screenshot_screen == "achievements") m_screen = Screen::Achievements;
+      m_lang_open = std::getenv("TENSHU_TEST_LANGMENU") != nullptr;
       if (screenshot_screen == "choice") m_modal = Modal::PlayChoice;
       if (screenshot_screen == "dialog") ShowDialog("Ejemplo de diálogo.\nSegunda línea de texto.");
       if (const char* st = std::getenv("TENSHU_TEST_STYLE"))

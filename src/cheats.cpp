@@ -44,6 +44,8 @@ std::vector<Cheat> LoadCheats(const std::string& assets_dir, const std::string& 
     if (!cur.name.empty() && !cur.codes.empty() && cur.name.find("Widescreen") == std::string::npos)
     {
       cur.label = TranslateCheatName(cur.name);
+      for (size_t i = 0; i < cur.name.size(); i++)
+        cur.label_en += cur.name[i] == '\\' ? std::string(" · ") : std::string(1, cur.name[i]);
       out.push_back(cur);
     }
     cur = Cheat{};

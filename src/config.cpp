@@ -290,6 +290,7 @@ void Config::Load()
     else if (key == "sfx_volume") sfx_volume = std::atoi(val.c_str());
     else if (key == "fast_boot") fast_boot = b;
     else if (key == "prompt_style") prompt_style = val;
+    else if (key == "language") language = val;
     else if (key == "game_prompts") game_prompts = b;
     else if (key == "free_camera") free_camera = b;
     else if (key == "modern_controls") modern_controls = b;
@@ -339,6 +340,7 @@ void Config::Save() const
   out << "sfx_volume=" << sfx_volume << "\n";
   out << "fast_boot=" << fast_boot << "\n";
   out << "prompt_style=" << prompt_style << "\n";
+  out << "language=" << language << "\n";
   out << "game_prompts=" << game_prompts << "\n";
   out << "free_camera=" << free_camera << "\n";
   out << "modern_controls=" << modern_controls << "\n";

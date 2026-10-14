@@ -1,4 +1,5 @@
 #include "achievements.h"
+#include "i18n.h"
 #include "platform.h"
 #include "config.h"
 #include "json.h"
@@ -161,8 +162,10 @@ bool Achievements::LoadCache()
     Achievement ach;
     ach.id = static_cast<uint32_t>(a["ID"].AsNumber());
     // Se muestran en español: el texto descargado se traduce aquí, en el propio equipo.
-    ach.title = TranslateAchievementTitle(a["Title"].AsString());
-    ach.description = TranslateAchievementDescription(a["Description"].AsString());
+    ach.title_en = a["Title"].AsString();
+    ach.description_en = a["Description"].AsString();
+    ach.title = TranslateAchievementTitle(ach.title_en);
+    ach.description = TranslateAchievementDescription(ach.description_en);
     ach.badge = a["BadgeName"].AsString();
     ach.memaddr = a["MemAddr"].AsString();
     ach.author = a["Author"].AsString();
@@ -298,9 +301,9 @@ std::string Achievements::Status() const
 {
   switch (m_state)
   {
-    case State::NoGame: return "Selecciona primero la imagen del juego en OPCIONES.";
-    case State::NotSupported: return "Este disco no tiene logros en RetroAchievements.";
-    case State::NeedLogin: return "Inicia sesión una vez para descargar los logros. Después funcionan sin conexión.";
+    case State::NoGame: return L("Selecciona primero la imagen del juego en OPCIONES.", "Select the game image in OPTIONS first.");
+    case State::NotSupported: return L("Este disco no tiene logros en RetroAchievements.", "This disc has no achievements on RetroAchievements.");
+    case State::NeedLogin: return L("Inicia sesión una vez para descargar los logros. Después funcionan sin conexión.", "Log in once to download the achievements. After that they work offline.");
     case State::Working:
     {
       std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(m_mutex));
@@ -322,7 +325,7 @@ void Achievements::StartDownload(const std::string& user, const std::string& pas
   m_thread_done = false;
   {
     std::lock_guard<std::mutex> lock(m_mutex);
-    m_progress = "Conectando con RetroAchievements…";
+    m_progress = L("Conectando con RetroAchievements…", "Connecting to RetroAchievements…");
     m_error.clear();
   }
   std::thread(&Achievements::DownloadThread, this, user, password).detach();
@@ -349,40 +352,40 @@ void Achievements::DownloadThread(std::string user, std::string password)
   uint32_t game_id = m_game_id;
   if (!game_id)
   {
-    progress("Identificando el disco…");
+    progress(L("Identificando el disco…", "Identifying the disc…"));
     if (!CurlFetch(kServer, "r=gameid&m=" + m_hash, tmp) || !JsonParser::Parse(ReadAll(tmp), &root))
-      return fail("No se pudo conectar con RetroAchievements.\nComprueba tu conexión a internet.");
+      return fail(L("No se pudo conectar con RetroAchievements.\nComprueba tu conexión a internet.", "Could not connect to RetroAchievements.\nCheck your internet connection."));
     game_id = static_cast<uint32_t>(root["GameID"].AsNumber());
     if (!game_id)
-      return fail("RetroAchievements no reconoce esta versión del disco.");
+      return fail(L("RetroAchievements no reconoce esta versión del disco.", "RetroAchievements does not recognise this version of the disc."));
   }
 
   // 2) Iniciar sesión (la contraseña sólo viaja en esta petición y no se guarda).
-  progress("Iniciando sesión…");
+  progress(L("Iniciando sesión…", "Logging in…"));
   root = {};
   if (!CurlFetch(kServer, "r=login2&u=" + UrlEncode(user) + "&p=" + UrlEncode(password), tmp) ||
       !JsonParser::Parse(ReadAll(tmp), &root))
-    return fail("No se pudo iniciar sesión (sin respuesta del servidor).");
+    return fail(L("No se pudo iniciar sesión (sin respuesta del servidor).", "Could not log in (no response from the server)."));
   Platform::RemoveFile(tmp);
   if (root["Success"].type != JsonValue::Type::Bool || !root["Success"].b)
   {
     const std::string err = root["Error"].AsString();
-    return fail("Inicio de sesión rechazado" + (err.empty() ? std::string(".") : ":\n" + err));
+    return fail(L("Inicio de sesión rechazado", "Login rejected") + (err.empty() ? std::string(".") : ":\n" + err));
   }
   const std::string token = root["Token"].AsString();
   const std::string real_user = root["User"].AsString().empty() ? user : root["User"].AsString();
 
   // 3) Descargar el set de logros.
-  progress("Descargando logros…");
+  progress(L("Descargando logros…", "Downloading achievements…"));
   const std::string dir = base + "/" + std::to_string(game_id);
   Paths::MakeDirs(dir + "/badges");
   const std::string set_path = dir + "/set.json";
   if (!CurlFetch(kServer, "r=patch&u=" + UrlEncode(real_user) + "&t=" + UrlEncode(token) + "&g=" + std::to_string(game_id),
                  set_path))
-    return fail("No se pudo descargar el set de logros.");
+    return fail(L("No se pudo descargar el set de logros.", "Could not download the achievement set."));
   root = {};
   if (!JsonParser::Parse(ReadAll(set_path), &root) || root["PatchData"].IsNull())
-    return fail("Respuesta inesperada del servidor al descargar los logros.");
+    return fail(L("Respuesta inesperada del servidor al descargar los logros.", "Unexpected server response while downloading the achievements."));
 
   // 4) Insignias.
   const JsonValue& list = root["PatchData"]["Achievements"];

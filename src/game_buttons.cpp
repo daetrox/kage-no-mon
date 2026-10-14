@@ -1,4 +1,5 @@
 #include "game_buttons.h"
+#include "i18n.h"
 
 #include <SDL.h>
 #include "libretro.h"
@@ -218,7 +219,7 @@ Label KeyLabel(int scancode)
     case SDL_SCANCODE_KP_ENTER: return {"ENT", 0};
     case SDL_SCANCODE_SPACE: return {"SPC", 1};
     case SDL_SCANCODE_LSHIFT:
-    case SDL_SCANCODE_RSHIFT: return {"MAY", 2};
+    case SDL_SCANCODE_RSHIFT: return {LangEn() ? "SHF" : "MAY", 2};
     case SDL_SCANCODE_ESCAPE: return {"ESC"};
     case SDL_SCANCODE_BACKSPACE: return {"DEL"};
     case SDL_SCANCODE_TAB: return {"TAB"};

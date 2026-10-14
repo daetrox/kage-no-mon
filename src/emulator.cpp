@@ -1,4 +1,5 @@
 #include "emulator.h"
+#include "i18n.h"
 #include "libretro.h"
 #include "game_buttons.h"
 #include "platform.h"
@@ -346,7 +347,7 @@ bool Emulator::LoadCore(std::string* error)
   m_lib = Platform::OpenLibrary(path);
   if (!m_lib)
   {
-    *error = "No se pudo cargar el núcleo de emulación:\n" + Platform::LastLibraryError();
+    *error = L("No se pudo cargar el núcleo de emulación:\n", "Could not load the emulation core:\n") + Platform::LastLibraryError();
     return false;
   }
 
@@ -354,7 +355,7 @@ bool Emulator::LoadCore(std::string* error)
   g_core.name = reinterpret_cast<decltype(g_core.name)>(Platform::LibrarySymbol(m_lib, #name));                     \
   if (!g_core.name)                                                                                \
   {                                                                                                \
-    *error = "El núcleo no exporta " #name;                                                        \
+    *error = L("El núcleo no exporta ", "The core does not export ") + std::string(#name);                                                        \
     return false;                                                                                  \
   }
   LOAD_SYM(retro_init)
@@ -449,7 +450,7 @@ bool Emulator::Start(const Config& cfg, SDL_Window* window, SDL_GLContext ui_con
 
   if (!Paths::FileExists(cfg.game_path))
   {
-    *error = "No se encuentra la imagen del juego.\nSelecciónala en OPCIONES.";
+    *error = L("No se encuentra la imagen del juego.\nSelecciónala en OPCIONES.", "Game image not found.\nSelect it in OPTIONS.");
     return false;
   }
 
@@ -500,7 +501,7 @@ bool Emulator::Start(const Config& cfg, SDL_Window* window, SDL_GLContext ui_con
   info.path = m_game_path.c_str();
   if (!g_core.retro_load_game(&info))
   {
-    *error = "El núcleo no pudo arrancar el juego.\nComprueba la imagen del disco y la BIOS.";
+    *error = L("El núcleo no pudo arrancar el juego.\nComprueba la imagen del disco y la BIOS.", "The core could not start the game.\nCheck the disc image and the BIOS.");
     return false;
   }
 
@@ -606,7 +607,7 @@ bool Emulator::SetupHardwareContext(std::string* error)
   SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 0);
   if (!m_core_ctx)
   {
-    *error = std::string("No se pudo crear el contexto OpenGL del emulador:\n") + SDL_GetError();
+    *error = std::string(L("No se pudo crear el contexto OpenGL del emulador:\n", "Could not create the emulator's OpenGL context:\n")) + SDL_GetError();
     MakeUiCurrent();
     return false;
   }

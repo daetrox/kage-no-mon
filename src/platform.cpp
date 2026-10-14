@@ -1,4 +1,5 @@
 #include "platform.h"
+#include "i18n.h"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -126,7 +127,7 @@ std::string OpenFileDialog(const std::string& title, const std::string& patterns
   filter.push_back(L'\0');
   filter += Wide(list);
   filter.push_back(L'\0');
-  filter += L"Todos los archivos";
+  filter += LangEn() ? L"All files" : L"Todos los archivos";
   filter.push_back(L'\0');
   filter += L"*.*";
   filter.push_back(L'\0');
