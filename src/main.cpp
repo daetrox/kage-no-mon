@@ -1749,8 +1749,11 @@ EmuInput App::GatherGameInput()
                             (1u << RETRO_DEVICE_ID_JOYPAD_LEFT) | (1u << RETRO_DEVICE_ID_JOYPAD_RIGHT);
       in.buttons &= static_cast<uint16_t>(~dirs);
       in.analog[0][0] = in.analog[0][1] = 0;
+      // Hacia adelante; con un enemigo fijado y moviéndose hacia atrás o de lado, «atrás» (guardia
+      // mirándolo: FreeCamera::Steer pone la dirección del paso).
       if (mx * mx + my * my >= 0.25f * 0.25f)
-        in.buttons |= static_cast<uint16_t>(1u << RETRO_DEVICE_ID_JOYPAD_UP);
+        in.buttons |= static_cast<uint16_t>(
+          1u << (m_freecam.Strafing() ? RETRO_DEVICE_ID_JOYPAD_DOWN : RETRO_DEVICE_ID_JOYPAD_UP));
     }
   }
   m_last_input = in;

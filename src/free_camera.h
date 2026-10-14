@@ -32,6 +32,10 @@ public:
   // recibe los controles originales.
   void Steer(uint8_t* ram, size_t size, float move_x, float move_y, float dt);
   bool Steerable() const { return m_steerable; }
+  // Con un enemigo fijado y moviéndose hacia atrás o de lado: el personaje sigue mirando al enemigo
+  // y retrocede en guardia (el launcher debe pulsar «atrás» en lugar de «adelante»); la dirección real
+  // del paso la pone Steer, y la colisión del juego lo frena contra las paredes.
+  bool Strafing() const { return m_strafing; }
   // Códigos (formato GameShark) que hacen que, con el movimiento 360°, el jugador bloquee los golpes
   // de pie con el arma desenvainada, en su pose normal (sin ellos sólo bloquea andando hacia atrás,
   // y al azar); con los controles de tanque, los que restauran el código original. "" si no hay.
@@ -89,6 +93,9 @@ private:
   bool m_returning = false; // tras R3: girando hasta quedar detrás del personaje
   bool m_steerable = false; // controles 360° aplicables en el frame siguiente
   float m_steer_yaw = 0;    // giro actual del personaje con los controles 360° (radianes)
+  bool m_strafing = false;  // paso en guardia mirando al enemigo fijado
+  bool m_have_prev = false; // posición del frame anterior válida (para el paso en guardia)
+  int32_t m_prev_pos[3] = {};
   float m_world_yaw = 0, m_pitch = 0;       // orientación elegida (radianes)
   float m_dist = 0, m_height = 0;           // distancia horizontal y altura respecto a la cabeza
   float m_game_dist = 0, m_game_height = 0; // las que quiere el juego (con colisión)

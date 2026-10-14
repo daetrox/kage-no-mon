@@ -48,6 +48,9 @@ constexpr float kLockFov = 1.13f, kLockNear = 1500.0f;
 constexpr size_t kMaxProbes = 6;
 constexpr int kProbeFrames = 8, kProbeReads = 2;
 constexpr float kProbeClear = 0.85f; // visible si el juego deja la cámara a ≥85 % de la distancia
+// Fijado: hacia el enemigo (±40°) se corre; en cualquier otra dirección, paso en guardia mirándolo.
+constexpr float kStrafeCone = 0.766f; // cos 40°
+constexpr float kStrafeSpeed = 1600.0f; // unidades por segundo (como retroceder en guardia)
 // Proyección del juego: SetGeomScreen(300) en una pantalla de 320x256 (0x800170F0).
 constexpr float kProjH = 300.0f, kScreenHalfW = 160.0f, kScreenHalfH = 128.0f;
 // El centro de proyección queda 21 líneas por debajo del centro de la imagen visible (medido).
@@ -502,7 +505,8 @@ void FreeCamera::Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, 
                      m_probe_reads);
       if (m_probe_reads >= kProbeReads || m_probe_frames >= kProbeFrames)
       {
-        if (m_probe_reads >= kProbeReads && m_probe_min >= kProbeClear * m_probe_dist)
+        if (m_probe_reads >= kProbeReads &&
+            (m_probe_min >= kProbeClear * m_probe_dist || std::getenv("TENSHU_TEST_LOCK_NOLOS")))
         {
           m_lock_obj = m_probe.front(); // a la vista
           m_lock_event = LockEvent::Locked;
@@ -629,6 +633,10 @@ void FreeCamera::Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, 
 void FreeCamera::Steer(uint8_t* ram, size_t size, float move_x, float move_y, float dt)
 {
   m_steerable = false;
+  const bool was_strafing = m_strafing;
+  m_strafing = false;
+  if (!was_strafing)
+    m_have_prev = false;
   if (!ram || !Available() || !m_active || m_returning || m_mode + 2 > size || !FollowMode(Get16(ram, m_mode)))
     return;
   const uint32_t obj = Get32(ram, m_player) & 0x1FFFFF;
@@ -653,8 +661,43 @@ void FreeCamera::Steer(uint8_t* ram, size_t size, float move_x, float move_y, fl
     return;
   }
   // Hacia dentro de la pantalla el personaje mira en la misma dirección que la cámara (que queda en
-  // la dirección m_world_yaw desde su cabeza); la derecha de la pantalla suma.
+  // la dirección m_world_yaw desde su cabeza); la derecha de la pantalla suma. Con un ángulo `a`, el
+  // personaje mira (y avanza) en la dirección -(sin a, cos a).
   const float desired = m_world_yaw + std::atan2(move_x, -move_y);
+  const uint32_t posp = obj + 0x30 <= size ? Get32(ram, obj + 0x2C) & 0x1FFFFF : 0;
+  if (m_lock_obj && posp && posp + 12 <= size)
+  {
+    const float mvx = -std::sin(desired), mvz = -std::cos(desired);         // hacia donde se quiere ir
+    const float fx = -std::sin(m_lock_yaw), fz = -std::cos(m_lock_yaw);     // hacia el enemigo
+    if (mvx * fx + mvz * fz < kStrafeCone)
+    {
+      // Paso en guardia: mira al enemigo; el juego retrocede (hacia -f) y aquí se cambia ese
+      // retroceso por el desplazamiento pedido.
+      m_strafing = true;
+      const float yaw = current + std::remainder(m_lock_yaw - current, kTau) * (1.0f - std::exp(-14.0f * dt));
+      const int16_t value = static_cast<int16_t>(static_cast<int>(std::lround(yaw / kTau * 4096.0f)) & 0xFFF);
+      std::memcpy(ram + rot + 2, &value, 2);
+      m_steer_yaw = yaw;
+      int32_t pos[3];
+      std::memcpy(pos, ram + posp, sizeof(pos));
+      if (m_have_prev)
+      {
+        // Retroceso que ha hecho el juego este frame (componente alejándose del enemigo).
+        const float ax = static_cast<float>(pos[0] - m_prev_pos[0]), az = static_cast<float>(pos[2] - m_prev_pos[2]);
+        const float back = -(ax * fx + az * fz);
+        const float step = kStrafeSpeed * std::min(1.0f, mag) * dt;
+        const float nx = pos[0] + (back > 0 ? back * fx : 0.0f) + mvx * step;
+        const float nz = pos[2] + (back > 0 ? back * fz : 0.0f) + mvz * step;
+        pos[0] = static_cast<int32_t>(std::lround(nx));
+        pos[2] = static_cast<int32_t>(std::lround(nz));
+        std::memcpy(ram + posp, &pos[0], 4);
+        std::memcpy(ram + posp + 8, &pos[2], 4);
+      }
+      std::memcpy(m_prev_pos, pos, sizeof(pos));
+      m_have_prev = true;
+      return;
+    }
+  }
   const float diff = std::remainder(desired - current, kTau);
   // Giro rápido pero suave (como en los juegos actuales); los giros grandes se notan menos bruscos.
   const float yaw = current + diff * (1.0f - std::exp(-16.0f * dt));
