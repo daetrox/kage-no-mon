@@ -19,12 +19,13 @@ struct GameCamera
                                    // aceleración, velocidad y la diferencia con la posición deseada
   uint32_t smooth_target;          // suavizado del punto de mira (mismo formato)
   uint32_t char_list;              // punteros a los personajes del nivel (el primero, el jugador)
+  uint32_t cam_matrix;             // matriz de cámara del GTE (0x80072100): 3x3 en 1/4096 y traslación en +0x14
 };
 
 // Localizadas con volcados de RAM y desensamblando el código de la cámara: 0x800529F8 / 0x80051FB4
 // rotan la tabla, 0x800524D0 comprueba la colisión y 0x80051B10 suaviza. Tenchu 2, PAL España.
 const GameCamera kGames[] = {
-  {"SLES-02465", 0x81DE4, 0x82364, 0x8CB18, 0x8CB2C, 0x92580, 0x828D8, 0x828C8, 0xC0ED0},
+  {"SLES-02465", 0x81DE4, 0x82364, 0x8CB18, 0x8CB2C, 0x92580, 0x828D8, 0x828C8, 0xC0ED0, 0xCCE70},
 };
 
 constexpr float kDeadZone = 0.22f;
@@ -41,6 +42,17 @@ constexpr float kPullIn = 14.0f, kPullOut = 2.5f, kHeightRate = 6.0f;
 // a ~3000 del personaje), y cuánto se desplaza el punto de mira hacia el enemigo.
 constexpr float kLockRange = 9000.0f, kLockLose = 14000.0f, kLockLookShift = 0.3f;
 constexpr int kMaxCharacters = 64;
+// Sólo enemigos a la vista: dentro de este ángulo respecto a la cámara (o muy cerca), y comprobados
+// con la colisión del juego (como máximo kMaxProbes candidatos, kProbeFrames frames cada uno).
+constexpr float kLockFov = 1.13f, kLockNear = 1500.0f;
+constexpr size_t kMaxProbes = 6;
+constexpr int kProbeFrames = 8, kProbeReads = 2;
+constexpr float kProbeClear = 0.85f; // visible si el juego deja la cámara a ≥85 % de la distancia
+// Proyección del juego: SetGeomScreen(300) en una pantalla de 320x256 (0x800170F0).
+constexpr float kProjH = 300.0f, kScreenHalfW = 160.0f, kScreenHalfH = 128.0f;
+// El centro de proyección queda 21 líneas por debajo del centro de la imagen visible (medido).
+constexpr float kScreenOffsetY = 21.0f;
+constexpr float kMarkAbove = 1650.0f; // coronilla del personaje (la marca se dibuja un poco más arriba)
 
 // Modos de cámara del juego que siguen al personaje: 0 quieto, 2 girando en el sitio, 3 andando o
 // corriendo, 4 agachado. Con los demás (6 mirar con L1, 20 apuntar, nadar, cinemáticas…) manda el juego.
@@ -111,6 +123,7 @@ bool FreeCamera::SetGame(const std::string& serial)
       m_smooth = g.smooth;
       m_smooth_target = g.smooth_target;
       m_char_list = g.char_list;
+      m_cam_matrix = g.cam_matrix;
     }
   return Available();
 }
@@ -176,13 +189,12 @@ bool FreeCamera::EnemyPos(const uint8_t* ram, size_t size, uint32_t obj, int32_t
   return true;
 }
 
-uint32_t FreeCamera::FindEnemy(const uint8_t* ram, size_t size, const int32_t player[3], float face_x,
-                               float face_z, int side, uint32_t exclude) const
+std::vector<uint32_t> FreeCamera::FindEnemies(const uint8_t* ram, size_t size, const int32_t player[3],
+                                              float face_x, float face_z, int side, uint32_t exclude) const
 {
+  std::vector<std::pair<float, uint32_t>> found;
   if (!m_char_list || m_char_list + 4 * kMaxCharacters > size)
-    return 0;
-  uint32_t best = 0;
-  float best_score = 0;
+    return {};
   for (int i = 0; i < kMaxCharacters; i++)
   {
     const uint32_t ptr = Get32(ram, m_char_list + 4 * i);
@@ -201,14 +213,91 @@ uint32_t FreeCamera::FindEnemy(const uint8_t* ram, size_t size, const int32_t pl
     const float cross = face_x * dz - face_z * dx;
     if (side != 0 && (side > 0 ? cross > 0 : cross < 0))
       continue;
-    const float score = dist * (1.0f + 1.5f * ang / 3.14159265f);
-    if (!best || score < best_score)
+    if (side == 0 && ang > kLockFov && dist > kLockNear && !std::getenv("TENSHU_TEST_LOCK_ANYDIR"))
+      continue; // fuera del campo de visión (salvo si está encima)
+    found.push_back({dist * (1.0f + 1.5f * ang / 3.14159265f), obj});
+  }
+  std::sort(found.begin(), found.end());
+  std::vector<uint32_t> out;
+  for (const auto& f : found)
+    out.push_back(f.second);
+  if (out.size() > kMaxProbes)
+    out.resize(kMaxProbes);
+  return out;
+}
+
+void FreeCamera::StartProbe(std::vector<uint32_t> candidates)
+{
+  m_probe = std::move(candidates);
+  m_probe_frames = m_probe_reads = 0;
+  m_probe_min = 1e9f;
+  if (m_probe.empty())
+    m_lock_event = LockEvent::NoTarget;
+}
+
+void FreeCamera::ApplyProbe(uint8_t* ram, float rel_yaw, float dist, float height)
+{
+  // Los vectores de la cámara de todos los preajustes apuntan al candidato (mismo convenio que
+  // Apply: girados `rel_yaw` respecto al personaje); el juego calcula hasta dónde puede llegar.
+  std::vector<int16_t> t = m_original;
+  const float sy = std::sin(rel_yaw), cy = std::cos(rel_yaw);
+  const float d = std::min(dist, 30000.0f);
+  for (size_t e = 0; e + 16 <= t.size(); e += 16)
+  {
+    if (!IsPreset(&m_original[e]))
+      continue;
+    for (int v = 0; v < 2; v++)
     {
-      best = obj;
-      best_score = score;
+      t[e + v * 4] = 0;
+      t[e + v * 4 + 1] = static_cast<int16_t>(std::lround(m_head + kBaseHeight));
+      t[e + v * 4 + 2] = 0;
+    }
+    for (int v = 2; v < 4; v++)
+    {
+      const float len = v == 3 ? d : d * 0.25f;
+      t[e + v * 4] = static_cast<int16_t>(std::lround(len * sy));
+      t[e + v * 4 + 1] = static_cast<int16_t>(std::clamp(height, -30000.0f, 30000.0f));
+      t[e + v * 4 + 2] = static_cast<int16_t>(std::lround(len * cy));
     }
   }
-  return best;
+  std::memcpy(ram + m_table_begin, t.data(), t.size() * 2);
+  m_modified = true;
+}
+
+bool FreeCamera::LockMarker(const uint8_t* ram, size_t size, float* sx, float* sy, bool debug_player) const
+{
+  int32_t p[3];
+  if (debug_player)
+  {
+    const uint32_t obj = Get32(ram, m_player) & 0x1FFFFF;
+    const uint32_t posp = obj && obj + 0x30 <= size ? Get32(ram, obj + 0x2C) & 0x1FFFFF : 0;
+    if (!posp || posp + 12 > size)
+      return false;
+    std::memcpy(p, ram + posp, 12);
+  }
+  else if (!m_lock_obj || !EnemyPos(ram, size, m_lock_obj, p))
+  {
+    return false;
+  }
+  // Se proyecta con la matriz de cámara que el propio juego carga en el GTE (rotación, escala de
+  // aspecto y del parche 16:9 incluidas): v_cám = M·v/4096 + T; pantalla = H·v/z + centro.
+  if (!m_cam_matrix || m_cam_matrix + 0x20 > size)
+    return false;
+  int16_t m[9];
+  int32_t t[3];
+  std::memcpy(m, ram + m_cam_matrix, sizeof(m));
+  std::memcpy(t, ram + m_cam_matrix + 0x14, sizeof(t));
+  const float v[3] = {static_cast<float>(p[0]), static_cast<float>(p[1]) - kMarkAbove, static_cast<float>(p[2])};
+  float c[3];
+  for (int i = 0; i < 3; i++)
+    c[i] = (m[i * 3] * v[0] + m[i * 3 + 1] * v[1] + m[i * 3 + 2] * v[2]) / 4096.0f + t[i];
+  if (c[2] < 200.0f)
+    return false; // detrás de la cámara o pegado a ella
+  *sx = kProjH * c[0] / c[2] / kScreenHalfW;
+  *sy = (kProjH * c[1] / c[2] + kScreenOffsetY) / kScreenHalfH;
+  if (std::getenv("TENSHU_DEBUG_MARK"))
+    std::fprintf(stderr, "marca: c=(%.0f %.0f %.0f) -> %.2f %.2f\n", c[0], c[1], c[2], *sx, *sy);
+  return std::fabs(*sx) < 1.2f && std::fabs(*sy) < 1.2f;
 }
 
 void FreeCamera::Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, bool reset, bool keep, float dt)
@@ -274,8 +363,7 @@ void FreeCamera::Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, 
     else if (follow)
     {
       const float look = m_active ? m_world_yaw : player_yaw;
-      m_lock_obj = FindEnemy(ram, size, player, -std::sin(look), -std::cos(look), 0, 0);
-      m_lock_event = m_lock_obj ? LockEvent::Locked : LockEvent::NoTarget;
+      StartProbe(FindEnemies(ram, size, player, -std::sin(look), -std::cos(look), 0, 0));
       m_returning = false;
       m_flick_ready = false;
     }
@@ -299,13 +387,8 @@ void FreeCamera::Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, 
       {
         m_flick_ready = false;
         const float len = std::max(1.0f, std::sqrt(ex * ex + ez * ez));
-        if (const uint32_t next =
-              FindEnemy(ram, size, player, ex / len, ez / len, stick_x > 0 ? 1 : -1, m_lock_obj))
-        {
-          m_lock_obj = next;
-          EnemyPos(ram, size, m_lock_obj, enemy);
-          m_lock_event = LockEvent::Locked;
-        }
+        // Se comprueba que se vea; mientras, sigue fijado el actual.
+        StartProbe(FindEnemies(ram, size, player, ex / len, ez / len, stick_x > 0 ? 1 : -1, m_lock_obj));
       }
       sx = 0; // el giro manual queda en manos del fijado
       // El personaje mira al enemigo y la cámara queda detrás de él, en el mismo ángulo.
@@ -315,7 +398,7 @@ void FreeCamera::Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, 
 
   if (!m_active)
   {
-    if ((sx == 0 && sy == 0 && !keep && !m_lock_obj) || !follow)
+    if ((sx == 0 && sy == 0 && !keep && !m_lock_obj && m_probe.empty()) || !follow)
       return;
     // Se empieza desde donde está ahora la cámara del juego: sin saltos.
     const float dx = static_cast<float>(cam[0] - target[0]), dz = static_cast<float>(cam[2] - target[2]);
@@ -361,7 +444,68 @@ void FreeCamera::Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, 
     m_ignore_game = 0.3f;
   m_last_mode = mode;
   m_ignore_game = std::max(0.0f, m_ignore_game - dt);
-  if (m_smooth_set && m_have_written)
+  // Sondeo de visibilidad en curso: la distancia que deja el juego es la del candidato, no la de la
+  // cámara (que mientras tanto se queda donde está).
+  bool probing = false;
+  if (!m_probe.empty())
+  {
+    int32_t e[3];
+    if (!EnemyPos(ram, size, m_probe.front(), e))
+    {
+      m_probe.erase(m_probe.begin());
+      m_probe_frames = m_probe_reads = 0;
+      m_probe_min = 1e9f;
+    }
+    else
+    {
+      probing = true;
+      const float dx = static_cast<float>(e[0] - player[0]), dz = static_cast<float>(e[2] - player[2]);
+      m_probe_dist = std::sqrt(dx * dx + dz * dz);
+      if (m_smooth_set && m_have_written && m_probe_frames > 0)
+      {
+        int16_t delta[3];
+        std::memcpy(delta, ram + m_smooth + 6, sizeof(delta));
+        if (delta[0] || delta[1] || delta[2])
+        {
+          const float gx = static_cast<float>(m_written[0] + delta[0] - m_written[3]),
+                      gz = static_cast<float>(m_written[2] + delta[2] - m_written[5]);
+          m_probe_min = std::min(m_probe_min, std::sqrt(gx * gx + gz * gz));
+          m_probe_reads++;
+          const int16_t zero[3] = {};
+          std::memcpy(ram + m_smooth + 6, zero, sizeof(zero));
+        }
+      }
+      if (std::getenv("TENSHU_DEBUG_CAMERA"))
+        std::fprintf(stderr, "sondeo: objetivo %.0f, juego %.0f (%d lecturas)\n", m_probe_dist, m_probe_min,
+                     m_probe_reads);
+      if (m_probe_reads >= kProbeReads || m_probe_frames >= kProbeFrames)
+      {
+        if (m_probe_reads >= kProbeReads && m_probe_min >= kProbeClear * m_probe_dist)
+        {
+          m_lock_obj = m_probe.front(); // a la vista
+          m_lock_event = LockEvent::Locked;
+          m_probe.clear();
+          probing = false;
+        }
+        else
+        {
+          m_probe.erase(m_probe.begin());
+          if (m_probe.empty() && !m_lock_obj)
+            m_lock_event = LockEvent::NoTarget;
+        }
+        m_probe_frames = m_probe_reads = 0;
+        m_probe_min = 1e9f;
+        if (m_lock_obj && EnemyPos(ram, size, m_lock_obj, enemy))
+          m_lock_yaw =
+            std::atan2(static_cast<float>(player[0] - enemy[0]), static_cast<float>(player[2] - enemy[2]));
+      }
+      else
+      {
+        m_probe_frames++;
+      }
+    }
+  }
+  if (!probing && m_smooth_set && m_have_written)
   {
     int16_t delta[3];
     std::memcpy(delta, ram + m_smooth + 6, sizeof(delta));
@@ -405,7 +549,22 @@ void FreeCamera::Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, 
 
   // El juego calcula su posición deseada girando su tabla (fija respecto al mundo: se descuenta
   // el giro del personaje) y con el suavizado congelado no mueve la cámara.
-  Apply(ram, std::remainder(m_world_yaw - player_yaw, kTau), m_pitch);
+  if (!m_probe.empty())
+  {
+    int32_t e[3];
+    if (EnemyPos(ram, size, m_probe.front(), e))
+    {
+      const float ang = std::atan2(static_cast<float>(e[0] - player[0]), static_cast<float>(e[2] - player[2]));
+      // Altura en la tabla: relativa a los pies del personaje elevados kBaseHeight; al nivel de la
+      // cabeza del candidato.
+      ApplyProbe(ram, std::remainder(ang - player_yaw, kTau), m_probe_dist,
+                 static_cast<float>(e[1] - player[1]) + m_head + kBaseHeight);
+    }
+  }
+  else
+  {
+    Apply(ram, std::remainder(m_world_yaw - player_yaw, kTau), m_pitch);
+  }
   if (!m_smooth_set)
   {
     std::memcpy(m_smooth_original, ram + m_smooth, sizeof(m_smooth_original));

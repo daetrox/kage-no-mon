@@ -202,6 +202,20 @@ vec4 icon(vec2 uv)
   }
   else if (id == 10) d = min(sdSegment(p, vec2(0.2, 0.45), vec2(-0.25, 0.0)), sdSegment(p, vec2(0.2, -0.45), vec2(-0.25, 0.0))) - 0.09;
   else if (id == 11) d = min(sdSegment(p, vec2(-0.2, 0.45), vec2(0.25, 0.0)), sdSegment(p, vec2(-0.2, -0.45), vec2(0.25, 0.0))) - 0.09;
+  else if (id == 12)
+  {
+    // Marca de enemigo fijado: punta de flecha hacia abajo, con borde oscuro.
+    vec2 a = vec2(-0.62, 0.55), b = vec2(0.62, 0.55), c = vec2(0.0, -0.62);
+    float e1 = dot(p - a, normalize(vec2(b.y - a.y, a.x - b.x)));
+    float e2 = dot(p - b, normalize(vec2(c.y - b.y, b.x - c.x)));
+    float e3 = dot(p - c, normalize(vec2(a.y - c.y, c.x - a.x)));
+    float tri = max(max(-e1, -e2), -e3) + 0.06; // vértices en sentido horario: normales invertidas
+    float notch = length(p - vec2(0.0, 0.62)) - 0.42; // muesca superior: forma de punta de kunai
+    float dm = max(tri, -notch);
+    float fill = smoothstep(px, -px, dm);
+    float rim = smoothstep(px, -px, dm - 0.12);
+    return vec4(mix(vec3(0.05, 0.0, 0.0), uColor.rgb, fill), rim * uColor.a);
+  }
   float a = smoothstep(px, -px, d);
   return vec4(uColor.rgb, a * uColor.a);
 }

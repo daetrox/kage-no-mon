@@ -52,7 +52,7 @@ ni mensajes extraños.
 | 🎮 **Teclado, Xbox o PlayStation** | Los iconos de los botones cambian solos según lo que uses. |
 | ⌨️ **Controles a tu gusto** | Reasigna cada botón del teclado y del mando por separado, con restauración por defecto. |
 | 🎮 **Iconos del juego según tu mando** | Los ✕ ○ □ △ y START de Tenchu 2 (menús, objetos y tutoriales) se convierten en A/B/X/Y o en tus teclas, con tus asignaciones, al instante. |
-| 🎯 **Fijar enemigo (L3)** | La cámara se coloca tras de ti mirando al enemigo más cercano y el personaje se gira hacia él; el joystick derecho a un lado cambia de objetivo. |
+| 🎯 **Fijar enemigo (L3)** | Fija al enemigo a la vista más cercano (nunca a través de paredes), lo señala con una marca roja sobre su cabeza y la cámara lo encuadra tras de ti; el joystick derecho a un lado cambia de objetivo. |
 | 🕹️ **Movimiento 360°** | El personaje corre hacia donde empujas el joystick, relativo a la cámara, en lugar de los controles de tanque (se pueden recuperar en Opciones). |
 | 🎥 **Cámara libre** | Gira la cámara alrededor del personaje con el joystick derecho, con la colisión con muros del propio juego; R3 la devuelve detrás (no disponible en hardcore). |
 | 💀 **Modo hardcore** | Como en la consola: BIOS original, sin estados guardados ni trucos. Los logros conseguidos así se marcan como hardcore. |

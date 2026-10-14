@@ -40,6 +40,7 @@ enum class Icon : int
   Underline = 9,
   ArrowLeft = 10,
   ArrowRight = 11,
+  LockMark = 12,
 };
 
 enum class Align

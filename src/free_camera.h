@@ -41,6 +41,9 @@ public:
   // suelta el que esté fijado. Los avisos («Enemigo fijado»…) se recogen con TakeLockEvent.
   void RequestLock() { m_lock_request = true; }
   bool Locked() const { return m_lock_obj != 0; }
+  // Posición en pantalla de la marca sobre el enemigo fijado (o, con debug_player, sobre la cabeza
+  // del jugador): x/y de -1 a 1 en la imagen del juego (y hacia abajo). false si no se ve.
+  bool LockMarker(const uint8_t* ram, size_t size, float* x, float* y, bool debug_player = false) const;
   enum class LockEvent { None, Locked, Released, NoTarget, Lost };
   LockEvent TakeLockEvent()
   {
@@ -55,10 +58,15 @@ public:
 
 private:
   void Apply(uint8_t* ram, float yaw, float pitch);
-  // Enemigo vivo más cercano a la dirección (face_x, face_z), sólo del lado `side` (-1 izquierda,
-  // +1 derecha, 0 cualquiera) y distinto de `exclude`; 0 si no hay.
-  uint32_t FindEnemy(const uint8_t* ram, size_t size, const int32_t player[3], float face_x, float face_z,
-                     int side, uint32_t exclude) const;
+  // Enemigos vivos al alcance, ordenados de mejor a peor candidato según la dirección (face_x,
+  // face_z): sólo del lado `side` (-1 izquierda, +1 derecha, 0 cualquiera; con 0, dentro del campo
+  // de visión) y distintos de `exclude`.
+  std::vector<uint32_t> FindEnemies(const uint8_t* ram, size_t size, const int32_t player[3], float face_x,
+                                    float face_z, int side, uint32_t exclude) const;
+  // Sondeo de visibilidad: la cámara del juego (con su colisión) se apunta al candidato; si la acerca
+  // antes de llegar a él, hay algo en medio.
+  void StartProbe(std::vector<uint32_t> candidates);
+  void ApplyProbe(uint8_t* ram, float rel_yaw, float dist, float height);
   bool EnemyPos(const uint8_t* ram, size_t size, uint32_t obj, int32_t pos[3]) const;
 
   // Offsets en la RAM.
@@ -70,6 +78,7 @@ private:
   uint32_t m_smooth = 0;                        // parámetros del suavizado de la posición
   uint32_t m_smooth_target = 0;                 // y del punto al que mira
   uint32_t m_char_list = 0;                     // lista de personajes (punteros; 0 = fin)
+  uint32_t m_cam_matrix = 0;                    // matriz de cámara del GTE
 
   std::vector<int16_t> m_original; // copia de la tabla sin tocar
   int16_t m_smooth_original[3] = {}, m_smooth_target_original[3] = {};
@@ -97,4 +106,9 @@ private:
   bool m_flick_ready = true; // el joystick derecho volvió al centro (para cambiar de enemigo)
   LockEvent m_lock_event = LockEvent::None;
   float m_lock_yaw = 0; // ángulo del personaje mirando al enemigo (y de la cámara tras él)
+  std::vector<uint32_t> m_probe;  // candidatos pendientes de comprobar (el primero, en curso)
+  int m_probe_frames = 0;         // frames con el candidato actual
+  int m_probe_reads = 0;          // cálculos del juego recibidos para él
+  float m_probe_dist = 0;         // distancia al candidato
+  float m_probe_min = 0;          // menor distancia que ha dejado el juego (con colisión)
 };

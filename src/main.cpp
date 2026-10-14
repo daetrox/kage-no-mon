@@ -675,6 +675,8 @@ private:
   EmuInput m_last_input;       // lo último enviado al juego (para la cámara libre)
   bool m_r3_was_down = false;
   bool m_l3_was_down = false;
+  bool m_mark_visible = false; // marca del enemigo fijado
+  float m_mark_x = 0, m_mark_y = 0, m_mark_alpha = 0;
   float m_test_rstick[2] = {}; // pruebas: joystick derecho simulado
   float m_test_lstick[2] = {}; // y el izquierdo
   float m_move[2] = {};        // dirección pedida para los controles 360° (relativa a la cámara)
@@ -1043,14 +1045,10 @@ void App::StartGame(bool resume)
     if (ModernControls())
       m_freecam.Steer(const_cast<uint8_t*>(ram), n, m_move[0], m_move[1], dt);
     m_r3_was_down = r3;
-    switch (m_freecam.TakeLockEvent())
-    {
-      case FreeCamera::LockEvent::Locked: Toast("Enemigo fijado"); break;
-      case FreeCamera::LockEvent::Released: Toast("Enemigo soltado"); break;
-      case FreeCamera::LockEvent::NoTarget: Toast("No hay enemigos cerca"); break;
-      case FreeCamera::LockEvent::Lost: Toast("Enemigo perdido"); break;
-      default: break;
-    }
+    // Fijar enemigo: la marca sobre el enemigo (RenderGame) es el único aviso; se calcula aquí, tras
+    // el frame, con la cámara que verá el jugador.
+    m_freecam.TakeLockEvent();
+    m_mark_visible = m_freecam.LockMarker(ram, n, &m_mark_x, &m_mark_y, std::getenv("TENSHU_DEBUG_MARK") != nullptr);
     m_ach.DoFrame(ram, n);
   };
 
@@ -3011,7 +3009,7 @@ void App::RenderOptions()
       break;
     case OPT_FREE_CAMERA:
       help = "Joystick derecho: gira la cámara (respeta los muros). R3: la devuelve detrás. L3: fija al enemigo "
-             "más cercano (joystick derecho a un lado cambia de enemigo). No en hardcore.";
+             "a la vista más cercano (joystick derecho a un lado cambia de enemigo). No en hardcore.";
       break;
     case OPT_GAME_PROMPTS:
       help = "Los iconos de botones de los menús del juego se cambian por los de tu mando de Xbox o tu teclado, "
@@ -3568,6 +3566,16 @@ void App::RenderGame()
     m_r.Image(m_emu.Texture(), x, y, w, h, 0, v1, u1, 0, m_cfg.smooth_filter);
   else
     m_r.Image(m_emu.Texture(), x, y, w, h, 0, 0, u1, v1, m_cfg.smooth_filter);
+
+  // Marca sobre el enemigo fijado: punta roja que flota y late suavemente.
+  m_mark_alpha += ((m_mark_visible && !m_paused ? 1.0f : 0.0f) - m_mark_alpha) * 0.25f;
+  if (m_mark_alpha > 0.02f)
+  {
+    const float size = h * 0.045f * (1.0f + 0.06f * std::sin(m_time * 5.0f));
+    const float mx = x + w * (0.5f + 0.5f * m_mark_x), my = y + h * (0.5f + 0.5f * m_mark_y) - h * 0.02f;
+    const float bob = h * 0.008f * std::sin(m_time * 3.0f);
+    m_r.DrawIcon(Icon::LockMark, mx - size / 2, my - size + bob, size, {0.86f, 0.1f, 0.08f, 0.9f * m_mark_alpha});
+  }
 }
 
 void App::RenderPause()
