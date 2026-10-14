@@ -185,6 +185,9 @@ juego. Si quieres la original, copia la de tu consola en `bios/` y elígela en
 Cualquier versión de *Tenchu 2* para PlayStation debería arrancar. La pantalla panorámica 16:9
 está disponible para **SLES-02465** (España), **SLES-02452** (Europa), **SLUS-00939** (EE. UU.)
 y **SLPS-03040** (Japón).
+
+La cámara libre, el movimiento 360°, fijar enemigo y el bloqueo en guardia funcionan con
+**SLES-02465** (España) y **SLUS-00939** (EE. UU.).
 </details>
 
 <details>

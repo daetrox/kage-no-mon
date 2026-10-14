@@ -26,6 +26,8 @@ struct GameCamera
 // rotan la tabla, 0x800524D0 comprueba la colisión y 0x80051B10 suaviza. Tenchu 2, PAL España.
 const GameCamera kGames[] = {
   {"SLES-02465", 0x81DE4, 0x82364, 0x8CB18, 0x8CB2C, 0x92580, 0x828D8, 0x828C8, 0xC0ED0, 0xCCE70},
+  // EE. UU.: el mismo código y los mismos datos, desplazados (localizados por firmas de código).
+  {"SLUS-00939", 0x822B0, 0x82830, 0x8CFE0, 0x8CFF4, 0x92A48, 0x82DA4, 0x82D94, 0xC1398, 0xCD338},
 };
 
 constexpr float kDeadZone = 0.22f;
@@ -727,22 +729,45 @@ std::string FreeCamera::BlockPatch(const std::string& serial, bool modern)
   // recompilado), cada uno condicionado a la instrucción «lui a0, 0x8009» de 0x80020B1C. Con los
   // controles de tanque se escriben los valores originales, por si un estado guardado los trae
   // cambiados (también 0x80020B00, que una versión de prueba cambiaba).
-  if (serial != "SLES-02465")
-    return "";
-  static const struct
+  // En la versión de EE. UU. la misma función está 0xCC bytes antes y llama a 0x8007E020.
+  struct Write
   {
     uint32_t addr;
     uint16_t original, patched;
-  } kWrites[] = {
+  };
+  static const Write kSpain[] = {
     {0x80020B74, 0x0012, 0x0078}, {0x80020B7C, 0x0005, 0x0100}, {0x80020B7E, 0x2842, 0x3842},
     {0x80020B88, 0xF6D4, 0x82EE}, {0x80020B8A, 0x0C01, 0x0800}, {0x80020B00, 0x0104, 0x0104},
   };
+  static const Write kUsa[] = {
+    {0x80020AA8, 0x0012, 0x0078}, {0x80020AB0, 0x0005, 0x0100}, {0x80020AB2, 0x2842, 0x3842},
+    {0x80020ABC, 0xF808, 0x82BB}, {0x80020ABE, 0x0C01, 0x0800},
+  };
+  const Write* writes;
+  size_t count;
+  uint32_t check; // instrucción «lui a0, 0x8009» que confirma que es el código esperado
+  if (serial == "SLES-02465")
+  {
+    writes = kSpain;
+    count = std::size(kSpain);
+    check = 0x80020B1E;
+  }
+  else if (serial == "SLUS-00939")
+  {
+    writes = kUsa;
+    count = std::size(kUsa);
+    check = 0x80020A52;
+  }
+  else
+  {
+    return "";
+  }
   std::string code;
   char line[64];
-  for (const auto& w : kWrites)
+  for (size_t i = 0; i < count; i++)
   {
-    std::snprintf(line, sizeof(line), "%sD0020B1E 3C04+%08X %04X", code.empty() ? "" : "+",
-                  0x80000000u | (w.addr & 0xFFFFFF), modern ? w.patched : w.original);
+    std::snprintf(line, sizeof(line), "%sD0%06X 3C04+%08X %04X", code.empty() ? "" : "+", check & 0xFFFFFF,
+                  0x80000000u | (writes[i].addr & 0xFFFFFF), modern ? writes[i].patched : writes[i].original);
     code += line;
   }
   return code;
