@@ -188,7 +188,7 @@ está disponible para **SLES-02465** (España), **SLES-02452** (Europa), **SLUS-
 y **SLPS-03040** (Japón).
 
 La cámara libre, el movimiento 360°, fijar enemigo y el bloqueo en guardia funcionan con
-**SLES-02465** (España) y **SLUS-00939** (EE. UU.).
+**SLES-02465** (España), **SLUS-00939** (EE. UU.) y **SLPS-03040** (Japón).
 </details>
 
 <details>

@@ -28,6 +28,8 @@ const GameCamera kGames[] = {
   {"SLES-02465", 0x81DE4, 0x82364, 0x8CB18, 0x8CB2C, 0x92580, 0x828D8, 0x828C8, 0xC0ED0, 0xCCE70},
   // EE. UU.: el mismo código y los mismos datos, desplazados (localizados por firmas de código).
   {"SLUS-00939", 0x822B0, 0x82830, 0x8CFE0, 0x8CFF4, 0x92A48, 0x82DA4, 0x82D94, 0xC1398, 0xCD338},
+  // Japón (Rittai Ninja Katsugeki Tenchu 2): igual, con el código de la cámara 0xD584 más adelante.
+  {"SLPS-03040", 0x84028, 0x845A8, 0x8EBC0, 0x8EBD4, 0x94608, 0x84B1C, 0x84B0C, 0xC2F58, 0xCEEF8},
 };
 
 constexpr float kDeadZone = 0.22f;
@@ -743,6 +745,11 @@ std::string FreeCamera::BlockPatch(const std::string& serial, bool modern)
     {0x80020AA8, 0x0012, 0x0078}, {0x80020AB0, 0x0005, 0x0100}, {0x80020AB2, 0x2842, 0x3842},
     {0x80020ABC, 0xF808, 0x82BB}, {0x80020ABE, 0x0C01, 0x0800},
   };
+  // Japón: la pose al azar es 1 de cada 5 (en lugar de 3); el salto va al mismo «li s0, 1».
+  static const Write kJapan[] = {
+    {0x800211A8, 0x0012, 0x0078}, {0x800211B0, 0x0005, 0x0100}, {0x800211B2, 0x2842, 0x3842},
+    {0x800211BC, 0xFE90, 0x847C}, {0x800211BE, 0x0C01, 0x0800},
+  };
   const Write* writes;
   size_t count;
   uint32_t check; // instrucción «lui a0, 0x8009» que confirma que es el código esperado
@@ -757,6 +764,12 @@ std::string FreeCamera::BlockPatch(const std::string& serial, bool modern)
     writes = kUsa;
     count = std::size(kUsa);
     check = 0x80020A52;
+  }
+  else if (serial == "SLPS-03040")
+  {
+    writes = kJapan;
+    count = std::size(kJapan);
+    check = 0x80021152;
   }
   else
   {
