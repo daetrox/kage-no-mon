@@ -62,6 +62,8 @@ ni mensajes extraños.
 
 ## 📸 Capturas
 
+<sub>Interfaz en inglés; el launcher también está en español (bandera de arriba a la derecha).</sub>
+
 <table>
   <tr>
     <td><img src="docs/menu.jpg" alt="Menú principal"></td>

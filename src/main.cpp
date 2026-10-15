@@ -39,7 +39,7 @@ extern "C" {
 
 namespace {
 
-constexpr const char* kVersion = "v1.1.0";
+constexpr const char* kVersion = "v1.1.1";
 constexpr float kImgW = 1536.0f;
 constexpr float kImgH = 1024.0f;
 constexpr float kTitleH = 36.0f;
