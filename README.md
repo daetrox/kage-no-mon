@@ -43,14 +43,10 @@ ni mensajes extraños.
 
 | | |
 |---|---|
-| 🎬 **Animaciones de entrada y salida** | Un kanji 「忍」 en un círculo de tinta y una pincelada que revela un castillo en llamas. |
-| 🔥 **Fondo vivo** | El fuego de los edificios ondula, las brasas suben y el aire tiembla por el calor. |
-| 🎵 **Música y sonidos originales** | Koto, shakuhachi y taiko compuestos para el launcher (libres de derechos). |
 | 🏆 **Logros sin conexión** | Logros de RetroAchievements: los descargas una vez y después se juegan *offline*. |
 | 🖥️ **Pantalla panorámica 16:9** | Con un parche real del juego, no un estiramiento: más campo de visión. |
 | ✨ **Gráficos mejorados** | Hasta 5× la resolución original, texturas suavizadas (xBR) y polígonos sin temblores. |
 | 🎮 **Teclado, Xbox o PlayStation** | Los iconos de los botones cambian solos según lo que uses. |
-| ⌨️ **Controles a tu gusto** | Reasigna cada botón del teclado y del mando por separado, con restauración por defecto. |
 | 🎮 **Iconos del juego según tu mando** | Los ✕ ○ □ △ y START de Tenchu 2 (menús, objetos y tutoriales) se convierten en A/B/X/Y o en tus teclas, con tus asignaciones, al instante. |
 | ⌨️🖱️ **Teclado y ratón** | Esquema opcional: WASD para moverte, el ratón mueve la cámara, clic izquierdo ataca, clic derecho usa la herramienta y la rueda la cambia; Espacio salta y Ctrl agacha. |
 | 🎯 **Fijar enemigo (L3)** | Fija al enemigo a la vista más cercano (nunca a través de paredes), lo señala con una marca roja sobre su cabeza y la cámara lo encuadra tras de ti; el joystick derecho a un lado cambia de objetivo. |
@@ -60,8 +56,6 @@ ni mensajes extraños.
 | 🥷 **Trucos** | Vida infinita, todas las misiones, objetos infinitos… Se activan en *Opciones › Trucos* (los logros se pausan mientras haya trucos). |
 | 🇪🇸🇺🇸 **Español e inglés** | Cambia el idioma del launcher con la bandera de arriba a la derecha (la primera vez se elige según el idioma del sistema). |
 | 🇪🇸 **Logros en español** | En español, las descripciones se traducen en tu equipo, con los nombres oficiales de las misiones. |
-| 📜 **Créditos** | Todas las personas y proyectos que hacen posible el launcher, con sus licencias. |
-| 💾 **Guardado rápido** | Al salir se guarda tu partida y la retomas con **CONTINUAR**. |
 | 📦 **Un solo archivo** | AppImage: funciona en casi cualquier distribución de Linux sin instalar nada. |
 
 ---
