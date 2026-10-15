@@ -56,6 +56,21 @@ std::string CorePath() { return ExeDir() + "/core/swanstation_libretro.dll"; }
 std::string CorePath() { return ExeDir() + "/core/swanstation_libretro.so"; }
 #endif
 
+// Hasta la v1.1.1 las carpetas se llamaban «tenshu2» (el nombre del juego estaba mal escrito): si
+// sólo existe la antigua, se renombra a la nueva la primera vez, con todo su contenido.
+static std::string Migrated(const std::string& base)
+{
+  const std::string now = base + "/tenchu2", old = base + "/tenshu2";
+  std::error_code ec;
+  if (!fs::exists(Platform::Path(now), ec) && fs::is_directory(Platform::Path(old), ec))
+  {
+    fs::rename(Platform::Path(old), Platform::Path(now), ec);
+    if (ec)
+      return old; // si no se puede mover, se sigue usando la antigua
+  }
+  return now;
+}
+
 #ifdef _WIN32
 // %APPDATA% (configuración) y %LOCALAPPDATA% (partidas, logros…).
 static std::string KnownDir(const wchar_t* var)
@@ -64,8 +79,16 @@ static std::string KnownDir(const wchar_t* var)
   return v && *v ? Slashes(fs::path(v).u8string()) : ExeDir();
 }
 
-std::string ConfigDir() { return KnownDir(L"APPDATA") + "/tenshu2"; }
-std::string DataDir() { return KnownDir(L"LOCALAPPDATA") + "/tenshu2"; }
+std::string ConfigDir()
+{
+  static const std::string dir = Migrated(KnownDir(L"APPDATA"));
+  return dir;
+}
+std::string DataDir()
+{
+  static const std::string dir = Migrated(KnownDir(L"LOCALAPPDATA"));
+  return dir;
+}
 #else
 static std::string Home()
 {
@@ -75,14 +98,20 @@ static std::string Home()
 
 std::string ConfigDir()
 {
-  const char* xdg = std::getenv("XDG_CONFIG_HOME");
-  return (xdg && *xdg ? std::string(xdg) : Home() + "/.config") + "/tenshu2";
+  static const std::string dir = [] {
+    const char* xdg = std::getenv("XDG_CONFIG_HOME");
+    return Migrated(xdg && *xdg ? std::string(xdg) : Home() + "/.config");
+  }();
+  return dir;
 }
 
 std::string DataDir()
 {
-  const char* xdg = std::getenv("XDG_DATA_HOME");
-  return (xdg && *xdg ? std::string(xdg) : Home() + "/.local/share") + "/tenshu2";
+  static const std::string dir = [] {
+    const char* xdg = std::getenv("XDG_DATA_HOME");
+    return Migrated(xdg && *xdg ? std::string(xdg) : Home() + "/.local/share");
+  }();
+  return dir;
 }
 #endif
 
@@ -323,7 +352,7 @@ void Config::Save() const
 {
   Paths::MakeDirs(Paths::ConfigDir());
   std::ofstream out(Platform::Path(ConfigFile()));
-  out << "# Tenshu 2 - configuración del launcher\n";
+  out << "# Kage no Mon (Tenchu 2) - configuración del launcher\n";
   out << "game_path=" << game_path << "\n";
   out << "bios_file=" << bios_file << "\n";
   out << "hardware_renderer=" << hardware_renderer << "\n";

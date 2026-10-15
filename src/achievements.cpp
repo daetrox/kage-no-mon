@@ -22,7 +22,7 @@ extern "C" {
 
 namespace {
 
-constexpr const char* kUserAgent = "Tenshu2Launcher/0.2 (Linux) rcheevos/12.5";
+constexpr const char* kUserAgent = "Tenchu2Launcher/0.2 (Linux) rcheevos/12.5";
 constexpr const char* kServer = "https://retroachievements.org/dorequest.php";
 
 Achievements* g_active = nullptr; // sesión con el runtime activo (callbacks sin userdata)

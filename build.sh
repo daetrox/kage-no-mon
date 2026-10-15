@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Compila Tenshu 2 Launcher desde cero: SDL2, el núcleo SwanStation y el launcher.
+# Compila Kage no Mon (Tenchu 2) desde cero: SDL2, el núcleo SwanStation y el launcher.
 # Uso: ./build.sh            -> compila en build/dist
-#      ./build.sh --package  -> además crea tenshu2-linux-x86_64.tar.gz
+#      ./build.sh --package  -> además crea tenchu2-linux-x86_64.tar.gz
 set -euo pipefail
 cd "$(dirname "$0")"
 ROOT="$PWD"
@@ -52,19 +52,19 @@ ninja -C "$TP/build-swan" -j"$JOBS" # incremental: recompila si cambia el parche
 # --- Launcher ---
 cmake -S "$ROOT" -B "$ROOT/build" -G Ninja -DCMAKE_BUILD_TYPE=Release
 ninja -C "$ROOT/build" -j"$JOBS"
-cp "$ROOT/packaging/tenshu2.desktop" "$ROOT/LICENSE" "$ROOT/README.md" "$ROOT/build/dist/"
+cp "$ROOT/packaging/tenchu2.desktop" "$ROOT/LICENSE" "$ROOT/README.md" "$ROOT/build/dist/"
 
-echo ">> Listo: $ROOT/build/dist/tenshu2"
+echo ">> Listo: $ROOT/build/dist/tenchu2"
 
 if [ "${1:-}" = "--package" ]; then
-  rm -rf "$ROOT/build/Tenshu2"
-  cp -r "$ROOT/build/dist" "$ROOT/build/Tenshu2"
+  rm -rf "$ROOT/build/Tenchu2"
+  cp -r "$ROOT/build/dist" "$ROOT/build/Tenchu2"
   # Nunca distribuir el juego ni las BIOS de Sony: cada usuario aporta los suyos.
-  rm -rf "$ROOT/build/Tenshu2/game" "$ROOT/build/Tenshu2/bios"
-  mkdir -p "$ROOT/build/Tenshu2/game" "$ROOT/build/Tenshu2/bios"
-  echo "Copia aquí la imagen de tu disco (.cue/.bin/.chd)." > "$ROOT/build/Tenshu2/game/LEEME.txt"
-  echo "Copia aquí la BIOS de tu consola (scph5502.bin PAL, scph5501.bin USA, scph5500.bin JAP)." > "$ROOT/build/Tenshu2/bios/LEEME.txt"
-  tar -czf "$ROOT/tenshu2-linux-x86_64.tar.gz" -C "$ROOT/build" Tenshu2
-  rm -rf "$ROOT/build/Tenshu2"
-  echo ">> Paquete: $ROOT/tenshu2-linux-x86_64.tar.gz"
+  rm -rf "$ROOT/build/Tenchu2/game" "$ROOT/build/Tenchu2/bios"
+  mkdir -p "$ROOT/build/Tenchu2/game" "$ROOT/build/Tenchu2/bios"
+  echo "Copia aquí la imagen de tu disco (.cue/.bin/.chd)." > "$ROOT/build/Tenchu2/game/LEEME.txt"
+  echo "Copia aquí la BIOS de tu consola (scph5502.bin PAL, scph5501.bin USA, scph5500.bin JAP)." > "$ROOT/build/Tenchu2/bios/LEEME.txt"
+  tar -czf "$ROOT/tenchu2-linux-x86_64.tar.gz" -C "$ROOT/build" Tenchu2
+  rm -rf "$ROOT/build/Tenchu2"
+  echo ">> Paquete: $ROOT/tenchu2-linux-x86_64.tar.gz"
 fi

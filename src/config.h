@@ -57,8 +57,8 @@ namespace Paths {
 std::string ExeDir();       // carpeta del ejecutable
 std::string AssetsDir();    // <exe>/assets
 std::string CorePath();     // <exe>/core/swanstation_libretro.so
-std::string ConfigDir();    // ~/.config/tenshu2
-std::string DataDir();      // ~/.local/share/tenshu2
+std::string ConfigDir();    // ~/.config/tenchu2
+std::string DataDir();      // ~/.local/share/tenchu2
 std::string SavesDir();     // tarjetas de memoria
 std::string StatesDir();    // estados guardados
 std::string UserDir();      // junto al ejecutable, o junto al .AppImage si se ejecuta así

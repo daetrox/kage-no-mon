@@ -225,7 +225,7 @@ std::vector<uint32_t> FreeCamera::FindEnemies(const uint8_t* ram, size_t size, c
     const float cross = face_x * dz - face_z * dx;
     if (side != 0 && (side > 0 ? cross > 0 : cross < 0))
       continue;
-    if (side == 0 && ang > kLockFov && dist > kLockNear && !std::getenv("TENSHU_TEST_LOCK_ANYDIR"))
+    if (side == 0 && ang > kLockFov && dist > kLockNear && !std::getenv("TENCHU_TEST_LOCK_ANYDIR"))
       continue; // fuera del campo de visión (salvo si está encima)
     found.push_back({dist * (1.0f + 1.5f * ang / 3.14159265f), obj});
   }
@@ -324,7 +324,7 @@ bool FreeCamera::LockMarker(const uint8_t* ram, size_t size, float* sx, float* s
     return false; // detrás de la cámara o pegado a ella
   *sx = kProjH * c[0] / c[2] / kScreenHalfW;
   *sy = (kProjH * c[1] / c[2] + kScreenOffsetY) / kScreenHalfH;
-  if (std::getenv("TENSHU_DEBUG_MARK"))
+  if (std::getenv("TENCHU_DEBUG_MARK"))
     std::fprintf(stderr, "marca: c=(%.0f %.0f %.0f) -> %.2f %.2f\n", c[0], c[1], c[2], *sx, *sy);
   return std::fabs(*sx) < 1.2f && std::fabs(*sy) < 1.2f;
 }
@@ -507,13 +507,13 @@ void FreeCamera::Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, 
           std::memcpy(ram + m_smooth + 6, zero, sizeof(zero));
         }
       }
-      if (std::getenv("TENSHU_DEBUG_CAMERA"))
+      if (std::getenv("TENCHU_DEBUG_CAMERA"))
         std::fprintf(stderr, "sondeo: objetivo %.0f, juego %.0f (%d lecturas)\n", m_probe_dist, m_probe_min,
                      m_probe_reads);
       if (m_probe_reads >= kProbeReads || m_probe_frames >= kProbeFrames)
       {
         if (m_probe_reads >= kProbeReads &&
-            (m_probe_min >= kProbeClear * m_probe_dist || std::getenv("TENSHU_TEST_LOCK_NOLOS")))
+            (m_probe_min >= kProbeClear * m_probe_dist || std::getenv("TENCHU_TEST_LOCK_NOLOS")))
         {
           m_lock_obj = m_probe.front(); // a la vista
           m_lock_event = LockEvent::Locked;
@@ -631,7 +631,7 @@ void FreeCamera::Frame(uint8_t* ram, size_t size, float stick_x, float stick_y, 
     pos[3] += static_cast<int32_t>(std::lround((enemy[0] - player[0]) * kLockLookShift));
     pos[5] += static_cast<int32_t>(std::lround((enemy[2] - player[2]) * kLockLookShift));
   }
-  if (std::getenv("TENSHU_DEBUG_CAMERA"))
+  if (std::getenv("TENCHU_DEBUG_CAMERA"))
     std::fprintf(stderr, "camara: juego %.0f/%.0f -> libre %.0f/%.0f\n", m_game_dist, m_game_height, m_dist,
                  m_height);
   std::memcpy(ram + m_cam, pos, sizeof(pos));

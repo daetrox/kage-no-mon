@@ -61,7 +61,7 @@ constexpr unsigned kDeviceDualShock = RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG,
 
 void CoreLog(enum retro_log_level level, const char* fmt, ...)
 {
-  static const bool debug = std::getenv("TENSHU_DEBUG") != nullptr;
+  static const bool debug = std::getenv("TENCHU_DEBUG") != nullptr;
   if (level < (debug ? RETRO_LOG_INFO : RETRO_LOG_WARN))
     return;
   char buf[2048];
@@ -427,10 +427,10 @@ void Emulator::BuildOptions(const Config& cfg)
   opt("swanstation_Controller_EnableRumble", "true");
   opt("swanstation_MemoryCards_Card1Type", "PerGameTitle");
   opt("swanstation_CPU_ExecutionMode", "Recompiler");
-  opt("swanstation_Logging_LogLevel", std::getenv("TENSHU_DEBUG") ? "Info" : "Warning");
+  opt("swanstation_Logging_LogLevel", std::getenv("TENCHU_DEBUG") ? "Info" : "Warning");
 
-  // Depuración: TENSHU_CORE_OPTS="clave=valor;clave=valor" sobrescribe opciones del núcleo.
-  if (const char* extra = std::getenv("TENSHU_CORE_OPTS"))
+  // Depuración: TENCHU_CORE_OPTS="clave=valor;clave=valor" sobrescribe opciones del núcleo.
+  if (const char* extra = std::getenv("TENCHU_CORE_OPTS"))
   {
     std::stringstream ss(extra);
     std::string item;
@@ -496,7 +496,7 @@ bool Emulator::Start(const Config& cfg, SDL_Window* window, SDL_GLContext ui_con
     m_kage_set_patches(m_button_patches.data(), m_button_patches.size());
   }
   if (m_kage_log)
-    m_kage_log(std::getenv("TENSHU_VRAM_LOG") ? std::getenv("TENSHU_VRAM_LOG") : "");
+    m_kage_log(std::getenv("TENCHU_VRAM_LOG") ? std::getenv("TENCHU_VRAM_LOG") : "");
   retro_game_info info = {};
   info.path = m_game_path.c_str();
   if (!g_core.retro_load_game(&info))

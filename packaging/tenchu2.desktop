@@ -1,9 +1,9 @@
 #!/usr/bin/env xdg-open
 [Desktop Entry]
 Type=Application
-Name=Tenshu 2
+Name=Kage no Mon
 Comment=Lanzador del juego (núcleo SwanStation)
-Exec=sh -c 'exec "$(dirname "$(readlink -f "%k")")/tenshu2"'
+Exec=sh -c 'exec "$(dirname "$(readlink -f "%k")")/tenchu2"'
 Terminal=false
 Categories=Game;
-StartupWMClass=tenshu2
+StartupWMClass=tenchu2

@@ -190,8 +190,8 @@ La cámara libre, el movimiento 360°, fijar enemigo y el bloqueo en guardia fun
 <details>
 <summary><b>¿Dónde se guardan mis partidas?</b></summary>
 
-- Tarjetas de memoria y guardados rápidos: `~/.local/share/tenshu2/`
-- Configuración: `~/.config/tenshu2/config.ini`
+- Tarjetas de memoria y guardados rápidos: `~/.local/share/tenchu2/`
+- Configuración: `~/.config/tenchu2/config.ini`
 </details>
 
 <details>

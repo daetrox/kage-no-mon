@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(tenshu2 C CXX)
+project(tenchu2 C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -31,7 +31,7 @@ target_include_directories(rcheevos PUBLIC ${RC}/include PRIVATE ${RC}/src)
 target_compile_definitions(rcheevos PUBLIC RC_DISABLE_LUA RC_HASH_NO_ROM RC_HASH_NO_ENCRYPTED RC_HASH_NO_ZIP)
 set_target_properties(rcheevos PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-add_executable(tenshu2
+add_executable(tenchu2
   src/main.cpp
   src/emulator.cpp
   src/renderer.cpp
@@ -45,9 +45,9 @@ add_executable(tenshu2
   src/audio.cpp
   src/platform.cpp
   src/stb_vorbis_impl.c)
-target_include_directories(tenshu2 PRIVATE src ${TP}/libretro-common/include ${RC}/src/util)
-target_compile_options(tenshu2 PRIVATE -Wall -Wno-unused-parameter)
-set_target_properties(tenshu2 PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${DIST})
+target_include_directories(tenchu2 PRIVATE src ${TP}/libretro-common/include ${RC}/src/util)
+target_compile_options(tenchu2 PRIVATE -Wall -Wno-unused-parameter)
+set_target_properties(tenchu2 PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${DIST})
 if(WIN32)
   # KageNoMon.exe: aplicación de ventana (sin consola), runtime de C++ enlazado dentro y recursos
   # (icono, manifiesto, versión).
@@ -59,32 +59,32 @@ if(WIN32)
   set(ICON ${CMAKE_SOURCE_DIR}/packaging/windows/kagenomon.ico)
   set(MANIFEST ${CMAKE_SOURCE_DIR}/packaging/windows/kagenomon.manifest)
   configure_file(${CMAKE_SOURCE_DIR}/packaging/windows/kagenomon.rc.in ${CMAKE_BINARY_DIR}/kagenomon.rc @ONLY)
-  target_sources(tenshu2 PRIVATE ${CMAKE_BINARY_DIR}/kagenomon.rc)
-  target_link_libraries(tenshu2 PRIVATE SDL2::SDL2main SDL2::SDL2 rcheevos comdlg32)
-  target_link_options(tenshu2 PRIVATE -static -mwindows)
-  set_target_properties(tenshu2 PROPERTIES OUTPUT_NAME KageNoMon)
+  target_sources(tenchu2 PRIVATE ${CMAKE_BINARY_DIR}/kagenomon.rc)
+  target_link_libraries(tenchu2 PRIVATE SDL2::SDL2main SDL2::SDL2 rcheevos comdlg32)
+  target_link_options(tenchu2 PRIVATE -static -mwindows)
+  set_target_properties(tenchu2 PROPERTIES OUTPUT_NAME KageNoMon)
 else()
-  target_link_libraries(tenshu2 PRIVATE SDL2::SDL2 rcheevos ${CMAKE_DL_LIBS} pthread)
+  target_link_libraries(tenchu2 PRIVATE SDL2::SDL2 rcheevos ${CMAKE_DL_LIBS} pthread)
   # Sólo $ORIGIN/lib: el ejecutable es portable y no incrusta rutas de la máquina de compilación.
-  set_target_properties(tenshu2 PROPERTIES SKIP_BUILD_RPATH TRUE)
-  target_link_options(tenshu2 PRIVATE "-Wl,-rpath,\$ORIGIN/lib")
+  set_target_properties(tenchu2 PROPERTIES SKIP_BUILD_RPATH TRUE)
+  target_link_options(tenchu2 PRIVATE "-Wl,-rpath,\$ORIGIN/lib")
 endif()
 
 # Copia el núcleo, SDL2, recursos y licencias junto al ejecutable.
 if(WIN32)
-  add_custom_command(TARGET tenshu2 POST_BUILD
+  add_custom_command(TARGET tenchu2 POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory ${DIST}/core ${DIST}/licenses
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SWAN_BUILD}/swanstation_libretro.dll ${DIST}/core/
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${TP}/sdl2-win/x86_64-w64-mingw32/bin/SDL2.dll ${DIST}/
     VERBATIM)
 else()
-  add_custom_command(TARGET tenshu2 POST_BUILD
+  add_custom_command(TARGET tenchu2 POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory ${DIST}/lib ${DIST}/core
     COMMAND sh -c "cp -P \"$0\"/libSDL2-2.0.so* \"$1\"/" ${TP}/sdl2-install/lib ${DIST}/lib
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SWAN_BUILD}/swanstation_libretro.so ${DIST}/core/
     VERBATIM)
 endif()
-add_custom_command(TARGET tenshu2 POST_BUILD
+add_custom_command(TARGET tenchu2 POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E make_directory ${DIST}/core ${DIST}/licenses
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets ${DIST}/assets
   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${TP}/swanstation/LICENSE ${DIST}/licenses/SwanStation-GPL-3.0.txt

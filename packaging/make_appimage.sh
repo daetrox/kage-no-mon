@@ -9,25 +9,25 @@ APPDIR="$ROOT/build/AppDir"
 TOOL="$ROOT/build/appimagetool-x86_64.AppImage"
 
 rm -rf "$APPDIR"
-mkdir -p "$APPDIR/usr/lib/tenshu2"
-cp -r "$ROOT/build/dist/." "$APPDIR/usr/lib/tenshu2/"
+mkdir -p "$APPDIR/usr/lib/tenchu2"
+cp -r "$ROOT/build/dist/." "$APPDIR/usr/lib/tenchu2/"
 # Nunca empaquetar el juego ni las BIOS del usuario.
-rm -rf "$APPDIR/usr/lib/tenshu2/game" "$APPDIR/usr/lib/tenshu2/bios" "$APPDIR/usr/lib/tenshu2/tenshu2.desktop"
+rm -rf "$APPDIR/usr/lib/tenchu2/game" "$APPDIR/usr/lib/tenchu2/bios" "$APPDIR/usr/lib/tenchu2/tenchu2.desktop"
 
-cp "$ROOT/packaging/tenshu2.png" "$APPDIR/tenshu2.png"
-cat > "$APPDIR/tenshu2.desktop" <<DESKTOP
+cp "$ROOT/packaging/tenchu2.png" "$APPDIR/tenchu2.png"
+cat > "$APPDIR/tenchu2.desktop" <<DESKTOP
 [Desktop Entry]
 Type=Application
 Name=Kage no Mon
 Comment=La Puerta de las Sombras: lanzador para Tenchu 2
-Exec=tenshu2
-Icon=tenshu2
+Exec=tenchu2
+Icon=tenchu2
 Categories=Game;
 DESKTOP
 cat > "$APPDIR/AppRun" <<'APPRUN'
 #!/bin/sh
 HERE="$(dirname "$(readlink -f "$0")")"
-exec "$HERE/usr/lib/tenshu2/tenshu2" "$@"
+exec "$HERE/usr/lib/tenchu2/tenchu2" "$@"
 APPRUN
 chmod +x "$APPDIR/AppRun"
 

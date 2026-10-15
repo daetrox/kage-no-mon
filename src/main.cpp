@@ -1,4 +1,4 @@
-// Tenshu 2 - Launcher
+// Kage no Mon - launcher para Tenchu 2
 // Lanzador independiente que integra el núcleo SwanStation (libretro) para que el juego se
 // sienta como una aplicación nativa: sin menús ni mensajes del emulador.
 //
@@ -39,7 +39,7 @@ extern "C" {
 
 namespace {
 
-constexpr const char* kVersion = "v1.1.1";
+constexpr const char* kVersion = "v1.1.2";
 constexpr float kImgW = 1536.0f;
 constexpr float kImgH = 1024.0f;
 constexpr float kTitleH = 36.0f;
@@ -585,7 +585,7 @@ private:
   void SetGamePath(const std::string& path);
   std::string StatePath() const
   {
-    if (const char* test = std::getenv("TENSHU_TEST_STATE")) // pruebas: nunca el estado del usuario
+    if (const char* test = std::getenv("TENCHU_TEST_STATE")) // pruebas: nunca el estado del usuario
       return test;
     return Paths::StatesDir() + "/" + StemName(m_cfg.game_path) + ".state";
   }
@@ -750,9 +750,9 @@ private:
 
 bool App::Init(std::string* error)
 {
-  SDL_SetHint("SDL_VIDEO_WAYLAND_WMCLASS", "tenshu2");
-  SDL_SetHint("SDL_VIDEO_X11_WMCLASS", "tenshu2");
-  SDL_SetHint(SDL_HINT_APP_NAME, "Tenshu 2");
+  SDL_SetHint("SDL_VIDEO_WAYLAND_WMCLASS", "tenchu2");
+  SDL_SetHint("SDL_VIDEO_X11_WMCLASS", "tenchu2");
+  SDL_SetHint(SDL_HINT_APP_NAME, "Tenchu 2");
   if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER | SDL_INIT_TIMER) != 0)
   {
     *error = SDL_GetError();
@@ -770,7 +770,7 @@ bool App::Init(std::string* error)
   if (m_cfg.fullscreen)
     flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
   // 3:2, la proporción de la ilustración.
-  m_window = SDL_CreateWindow("Tenshu 2", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1200, 800, flags);
+  m_window = SDL_CreateWindow("Tenchu 2", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1200, 800, flags);
   if (!m_window)
   {
     *error = SDL_GetError();
@@ -1040,11 +1040,11 @@ void App::StartGame(bool resume)
   m_emu.on_frame = [this]() {
     size_t n = 0;
     const uint8_t* ram = m_emu.SystemRam(&n);
-    // Pruebas: TENSHU_TEST_POKE="13f1ce+=8,92580:32=41000" escribe (o suma) palabras de 16 bits
+    // Pruebas: TENCHU_TEST_POKE="13f1ce+=8,92580:32=41000" escribe (o suma) palabras de 16 bits
     // (o de 32 con ":32") en la RAM tras cada frame.
-    // TENSHU_TEST_POKE_FRAMES=N: sólo durante los N primeros frames.
-    const char* poke_frames = std::getenv("TENSHU_TEST_POKE_FRAMES");
-    if (const char* poke = std::getenv("TENSHU_TEST_POKE");
+    // TENCHU_TEST_POKE_FRAMES=N: sólo durante los N primeros frames.
+    const char* poke_frames = std::getenv("TENCHU_TEST_POKE_FRAMES");
+    if (const char* poke = std::getenv("TENCHU_TEST_POKE");
         poke && ram && (!poke_frames || m_emu.FramesRun() < static_cast<uint64_t>(std::atoll(poke_frames))))
     {
       std::stringstream ss(poke);
@@ -1103,7 +1103,7 @@ void App::StartGame(bool resume)
     // Fijar enemigo: la marca sobre el enemigo (RenderGame) es el único aviso; se calcula aquí, tras
     // el frame, con la cámara que verá el jugador.
     m_freecam.TakeLockEvent();
-    m_mark_visible = m_freecam.LockMarker(ram, n, &m_mark_x, &m_mark_y, std::getenv("TENSHU_DEBUG_MARK") != nullptr);
+    m_mark_visible = m_freecam.LockMarker(ram, n, &m_mark_x, &m_mark_y, std::getenv("TENCHU_DEBUG_MARK") != nullptr);
     m_ach.DoFrame(ram, n);
   };
 
@@ -2730,7 +2730,7 @@ void App::RenderTitleBar()
   m_r.Rect(0, 0, static_cast<float>(m_w), h, UiMode::Solid, {0.03f, 0.025f, 0.025f, 1.0f});
   m_r.Rect(0, h - 1, static_cast<float>(m_w), 1, UiMode::Solid, {0.3f, 0.05f, 0.04f, 0.6f});
   m_r.Text(m_r.kanji, "忍", IS(12), IS(2), IS(28), kRed);
-  m_r.Text(m_r.ui, "Tenshu 2  -  Launcher", IS(62), IS(4), IS(22), {0.82f, 0.8f, 0.78f, 0.92f});
+  m_r.Text(m_r.ui, "Tenchu 2  -  Launcher", IS(62), IS(4), IS(22), {0.82f, 0.8f, 0.78f, 0.92f});
 
   const float bw = IS(58);
   m_tb_close = {m_w - bw, 0, bw, h};
@@ -3988,7 +3988,7 @@ int App::Run(int argc, char** argv)
         SDL_free(locales);
       }
     }
-    if (const char* test = std::getenv("TENSHU_TEST_LANG")) // pruebas: "es" o "en"
+    if (const char* test = std::getenv("TENCHU_TEST_LANG")) // pruebas: "es" o "en"
       en = std::strcmp(test, "en") == 0;
     I18n::Current() = en ? Lang::En : Lang::Es;
   }
@@ -4005,7 +4005,7 @@ int App::Run(int argc, char** argv)
   std::string error;
   if (!Init(&error))
   {
-    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Tenshu 2", error.c_str(), m_window);
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Tenchu 2", error.c_str(), m_window);
     SDL_Log("%s", error.c_str());
     return 1;
   }
@@ -4032,13 +4032,13 @@ int App::Run(int argc, char** argv)
 
     if (screenshot_screen == "game" || screenshot_screen == "continue")
     {
-      if (const char* st = std::getenv("TENSHU_TEST_STYLE"))
+      if (const char* st = std::getenv("TENCHU_TEST_STYLE"))
         m_cfg.prompt_style = st;
-      m_cfg.hardcore = std::getenv("TENSHU_TEST_HARDCORE") != nullptr; // pruebas: modo normal por defecto
+      m_cfg.hardcore = std::getenv("TENCHU_TEST_HARDCORE") != nullptr; // pruebas: modo normal por defecto
       StartGame(screenshot_screen == "continue");
       if (m_modal == Modal::Dialog)
         SDL_Log("Error al arrancar: %s", m_dialog.c_str());
-      // TENSHU_TEST_SCRIPT="12:start,15:cross,20:left:2.5" pulsa botones en segundos concretos
+      // TENCHU_TEST_SCRIPT="12:start,15:cross,20:left:2.5" pulsa botones en segundos concretos
       // (el tercer campo, opcional, es cuánto tiempo se mantiene pulsado).
       struct Press
       {
@@ -4047,7 +4047,7 @@ int App::Run(int argc, char** argv)
         double hold;
       };
       std::vector<Press> script;
-      if (const char* sc = std::getenv("TENSHU_TEST_SCRIPT"))
+      if (const char* sc = std::getenv("TENCHU_TEST_SCRIPT"))
       {
         std::stringstream ss(sc);
         std::string item;
@@ -4090,17 +4090,17 @@ int App::Run(int argc, char** argv)
         const uint64_t now = SDL_GetPerformanceCounter();
         const double el = (now - start) / freq;
         m_test_buttons = 0;
-        // TENSHU_TEST_SAVE_AT="50" guarda un estado (en TENSHU_TEST_STATE) en ese segundo.
-        if (const char* sv = std::getenv("TENSHU_TEST_SAVE_AT"))
+        // TENCHU_TEST_SAVE_AT="50" guarda un estado (en TENCHU_TEST_STATE) en ese segundo.
+        if (const char* sv = std::getenv("TENCHU_TEST_SAVE_AT"))
           if (el >= std::atof(sv) && !m_test_saved)
             m_test_saved = SaveStateNow();
-        // TENSHU_TEST_RSTICK="2:4:1:0,5:6:0:-1" mueve el joystick derecho (inicio:fin:x:y).
-        // TENSHU_TEST_LSTICK igual para el joystick izquierdo.
+        // TENCHU_TEST_RSTICK="2:4:1:0,5:6:0:-1" mueve el joystick derecho (inicio:fin:x:y).
+        // TENCHU_TEST_LSTICK igual para el joystick izquierdo.
         for (int side = 0; side < 2; side++)
         {
           float* stick = side ? m_test_lstick : m_test_rstick;
           stick[0] = stick[1] = 0;
-          if (const char* rs = std::getenv(side ? "TENSHU_TEST_LSTICK" : "TENSHU_TEST_RSTICK"))
+          if (const char* rs = std::getenv(side ? "TENCHU_TEST_LSTICK" : "TENCHU_TEST_RSTICK"))
           {
             std::stringstream ss(rs);
             std::string item;
@@ -4115,8 +4115,8 @@ int App::Run(int argc, char** argv)
             }
           }
         }
-        // TENSHU_TEST_MOUSE="1:2:5:0" mueve el ratón (px por actualización) entre los segundos 1 y 2.
-        if (const char* ms = std::getenv("TENSHU_TEST_MOUSE"))
+        // TENCHU_TEST_MOUSE="1:2:5:0" mueve el ratón (px por actualización) entre los segundos 1 y 2.
+        if (const char* ms = std::getenv("TENCHU_TEST_MOUSE"))
         {
           float t0 = 0, t1 = 0, mx = 0, my = 0;
           if (std::sscanf(ms, "%f:%f:%f:%f", &t0, &t1, &mx, &my) == 4 && el >= t0 && el < t1)
@@ -4125,8 +4125,8 @@ int App::Run(int argc, char** argv)
             m_look_dy += my;
           }
         }
-        // TENSHU_TEST_STYLE_AT="55:xbox" cambia el estilo de iconos en plena partida.
-        if (const char* sa = std::getenv("TENSHU_TEST_STYLE_AT"))
+        // TENCHU_TEST_STYLE_AT="55:xbox" cambia el estilo de iconos en plena partida.
+        if (const char* sa = std::getenv("TENCHU_TEST_STYLE_AT"))
           if (el >= std::atof(sa) && std::strchr(sa, ':'))
             m_cfg.prompt_style = std::strchr(sa, ':') + 1;
         for (const Press& p : script)
@@ -4135,7 +4135,7 @@ int App::Run(int argc, char** argv)
         Update(static_cast<float>((now - last) / freq));
         last = now;
         Render();
-        const double every = std::getenv("TENSHU_TEST_SHOT_EVERY") ? std::atof(std::getenv("TENSHU_TEST_SHOT_EVERY")) : 5.0;
+        const double every = std::getenv("TENCHU_TEST_SHOT_EVERY") ? std::atof(std::getenv("TENCHU_TEST_SHOT_EVERY")) : 5.0;
         if (el > (shot + 1) * every)
         {
           shot++;
@@ -4143,11 +4143,11 @@ int App::Run(int argc, char** argv)
                   static_cast<unsigned long long>(m_emu.FramesRun()), m_emu.TargetFps(), m_emu.FrameWidth(),
                   m_emu.FrameHeight());
           capture(m_screenshot_path + "." + std::to_string(shot) + ".ppm");
-          if (std::getenv("TENSHU_TEST_STATE_EACH"))
+          if (std::getenv("TENCHU_TEST_STATE_EACH"))
             m_emu.SaveState(m_screenshot_path + "." + std::to_string(shot) + ".state");
-          if (std::getenv("TENSHU_DUMP_VRAM"))
+          if (std::getenv("TENCHU_DUMP_VRAM"))
             m_emu.DumpVram(m_screenshot_path + "." + std::to_string(shot) + ".vram");
-          if (std::getenv("TENSHU_DUMP_RAM"))
+          if (std::getenv("TENCHU_DUMP_RAM"))
           {
             size_t n = 0;
             if (const uint8_t* ram = m_emu.SystemRam(&n))
@@ -4165,7 +4165,7 @@ int App::Run(int argc, char** argv)
       }
       SDL_Log("Emulación: %llu frames en %.1f s (objetivo %.2f fps)",
               static_cast<unsigned long long>(m_emu.FramesRun()), m_screenshot_time, m_emu.TargetFps());
-      if (std::getenv("TENSHU_TEST_PAUSE"))
+      if (std::getenv("TENCHU_TEST_PAUSE"))
       {
         m_paused = true;
         m_emu.SetPaused(true);
@@ -4179,9 +4179,9 @@ int App::Run(int argc, char** argv)
       m_time = m_screenshot_time;
       m_fade = 1.0f;
       m_intro_t = kIntroLen;
-      if (const char* it = std::getenv("TENSHU_TEST_INTRO"))
+      if (const char* it = std::getenv("TENCHU_TEST_INTRO"))
         m_intro_t = static_cast<float>(std::atof(it));
-      if (const char* ot = std::getenv("TENSHU_TEST_OUTRO"))
+      if (const char* ot = std::getenv("TENCHU_TEST_OUTRO"))
         m_outro_t = static_cast<float>(std::atof(ot));
       if (screenshot_screen == "options") m_screen = Screen::Options;
       if (screenshot_screen == "controls") m_screen = Screen::Controls;
@@ -4191,7 +4191,7 @@ int App::Run(int argc, char** argv)
       {
         m_screen = Screen::Cheats;
         m_cheat_list = LoadCheats(Paths::AssetsDir(), Paths::ReadDiscSerial(m_cfg.game_path));
-        if (const char* cs = std::getenv("TENSHU_TEST_CHEATSEL"))
+        if (const char* cs = std::getenv("TENCHU_TEST_CHEATSEL"))
         {
           m_cheat_sel = std::atoi(cs);
           const int n = static_cast<int>(m_cheat_list.size());
@@ -4199,36 +4199,36 @@ int App::Run(int argc, char** argv)
             m_cheat_scroll = std::clamp(m_cheat_sel * 56.0f - 224.0f, 0.0f, std::max(0.0f, n * 56.0f - 560.0f));
         }
       }
-      if (const char* cs = std::getenv("TENSHU_TEST_CREDITS"))
+      if (const char* cs = std::getenv("TENCHU_TEST_CREDITS"))
         m_credits_scroll = static_cast<float>(std::atof(cs));
       if (screenshot_screen == "confirmreset")
       {
         m_screen = Screen::Achievements;
         m_modal = Modal::ConfirmReset;
       }
-      if (const char* as = std::getenv("TENSHU_TEST_ACHSEL"))
+      if (const char* as = std::getenv("TENCHU_TEST_ACHSEL"))
       {
         m_ach_sel = std::atoi(as);
         m_ach_scroll = m_ach_scroll_target = std::max(0.0f, (m_ach_sel + 1) * 88.0f - 700.0f);
       }
-      if (const char* dev = std::getenv("TENSHU_TEST_DEVICE"))
+      if (const char* dev = std::getenv("TENCHU_TEST_DEVICE"))
         m_remap_device = std::atoi(dev);
-      if (const char* rs = std::getenv("TENSHU_TEST_REMAPSEL"))
+      if (const char* rs = std::getenv("TENCHU_TEST_REMAPSEL"))
         m_remap_sel = std::atoi(rs);
-      if (std::getenv("TENSHU_TEST_WAIT"))
+      if (std::getenv("TENCHU_TEST_WAIT"))
       {
         m_remap_wait = kRemapOrder[m_remap_sel];
         m_remap_timer = 4.2f;
       }
       if (screenshot_screen == "achievements") m_screen = Screen::Achievements;
-      m_lang_open = std::getenv("TENSHU_TEST_LANGMENU") != nullptr;
+      m_lang_open = std::getenv("TENCHU_TEST_LANGMENU") != nullptr;
       if (screenshot_screen == "choice") m_modal = Modal::PlayChoice;
       if (screenshot_screen == "dialog") ShowDialog("Ejemplo de diálogo.\nSegunda línea de texto.");
-      if (const char* st = std::getenv("TENSHU_TEST_STYLE"))
+      if (const char* st = std::getenv("TENCHU_TEST_STYLE"))
         m_cfg.prompt_style = st;
-      if (const char* pg = std::getenv("TENSHU_TEST_PAGE"))
+      if (const char* pg = std::getenv("TENCHU_TEST_PAGE"))
         m_opt_page = std::atoi(pg);
-      if (const char* sel = std::getenv("TENSHU_TEST_SEL"))
+      if (const char* sel = std::getenv("TENCHU_TEST_SEL"))
         m_sel = m_opt_sel = m_choice_sel = std::atoi(sel);
       int active = m_sel;
       if (m_modal == Modal::PlayChoice)
@@ -4237,8 +4237,8 @@ int App::Run(int argc, char** argv)
         active = m_opt_page < 0 ? m_opt_sel : -1;
       for (int i = 0; i < 8; i++)
         m_sel_anim[i] = (i == active) ? 1.0f : 0.0f;
-      // Para la marquesina: el texto empezó a desplazarse hace TENSHU_TEST_MARQUEE segundos.
-      if (const char* mq = std::getenv("TENSHU_TEST_MARQUEE"))
+      // Para la marquesina: el texto empezó a desplazarse hace TENCHU_TEST_MARQUEE segundos.
+      if (const char* mq = std::getenv("TENCHU_TEST_MARQUEE"))
       {
         Render(); // registra la fila activa
         m_marquee_start = m_time - static_cast<float>(std::atof(mq));
@@ -4277,9 +4277,9 @@ int App::Run(int argc, char** argv)
 
 int main(int argc, char** argv)
 {
-  // Prueba: TENSHU_PREVIEW_BUTTONS=archivo.ppm guarda los iconos generados para el juego
+  // Prueba: TENCHU_PREVIEW_BUTTONS=archivo.ppm guarda los iconos generados para el juego
   // (columnas: Xbox, teclado; con la configuración actual) y sale.
-  if (const char* out = std::getenv("TENSHU_PREVIEW_BUTTONS"))
+  if (const char* out = std::getenv("TENCHU_PREVIEW_BUTTONS"))
   {
     Config cfg;
     cfg.Load();

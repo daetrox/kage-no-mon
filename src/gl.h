@@ -2,7 +2,7 @@
 #pragma once
 #include <GL/glcorearb.h>
 
-#define TENSHU_GL_FUNCS(X)                                                                         \
+#define TENCHU_GL_FUNCS(X)                                                                         \
   X(PFNGLCLEARPROC, glClear)                                                                       \
   X(PFNGLCLEARCOLORPROC, glClearColor)                                                             \
   X(PFNGLVIEWPORTPROC, glViewport)                                                                 \
@@ -70,9 +70,9 @@
 
 // Los punteros viven en un namespace para no chocar con los símbolos de libGL.
 namespace tgl {
-#define TENSHU_GL_DECLARE(type, name) extern type name;
-TENSHU_GL_FUNCS(TENSHU_GL_DECLARE)
-#undef TENSHU_GL_DECLARE
+#define TENCHU_GL_DECLARE(type, name) extern type name;
+TENCHU_GL_FUNCS(TENCHU_GL_DECLARE)
+#undef TENCHU_GL_DECLARE
 
 bool LoadGLFunctions();
 } // namespace tgl
