@@ -29,6 +29,11 @@ std::string QuoteArg(const std::string& arg);
 // Destino de la salida que no interesa ("2>/dev/null" o "2>NUL").
 const char* NullRedirect();
 
+// Descarga una URL (POST si post_data no está vacío) en out_path; false si falla o el servidor
+// responde con error. En Windows usa WinHTTP (sin abrir ninguna consola); en Linux, curl.
+bool HttpFetch(const std::string& url, const std::string& post_data, const std::string& user_agent,
+               const std::string& out_path);
+
 // Diálogo nativo de Windows para elegir un archivo (ruta en UTF-8 con '/'; "" si se cancela).
 // patterns: "*.cue *.bin ..." (como en zenity).
 std::string OpenFileDialog(const std::string& title, const std::string& patterns);

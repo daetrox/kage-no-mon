@@ -6,6 +6,7 @@
 #define NOMINMAX
 #include <windows.h>
 #include <commdlg.h>
+#include <winhttp.h>
 #else
 #include <dlfcn.h>
 #endif
@@ -148,6 +149,68 @@ std::string OpenFileDialog(const std::string& title, const std::string& patterns
   std::replace(path.begin(), path.end(), '\\', '/');
   return path;
 }
+
+bool HttpFetch(const std::string& url, const std::string& post_data, const std::string& user_agent,
+               const std::string& out_path)
+{
+  const std::wstring wurl = Wide(url);
+  URL_COMPONENTS uc = {};
+  uc.dwStructSize = sizeof(uc);
+  wchar_t host[256] = {}, path[2048] = {};
+  uc.lpszHostName = host;
+  uc.dwHostNameLength = 256;
+  uc.lpszUrlPath = path;
+  uc.dwUrlPathLength = 2048;
+  if (!WinHttpCrackUrl(wurl.c_str(), 0, 0, &uc))
+    return false;
+
+  bool ok = false;
+  HINTERNET session = WinHttpOpen(Wide(user_agent).c_str(), WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+                                  WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+  HINTERNET connect = session ? WinHttpConnect(session, host, uc.nPort, 0) : nullptr;
+  const bool https = uc.nScheme == INTERNET_SCHEME_HTTPS;
+  HINTERNET request = connect ? WinHttpOpenRequest(connect, post_data.empty() ? L"GET" : L"POST", path, nullptr,
+                                                   WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
+                                                   https ? WINHTTP_FLAG_SECURE : 0)
+                              : nullptr;
+  if (request)
+  {
+    WinHttpSetTimeouts(request, 15000, 15000, 60000, 60000);
+    const wchar_t* headers = post_data.empty() ? WINHTTP_NO_ADDITIONAL_HEADERS
+                                               : L"Content-Type: application/x-www-form-urlencoded\r\n";
+    DWORD status = 0, size = sizeof(status);
+    if (WinHttpSendRequest(request, headers, post_data.empty() ? 0 : static_cast<DWORD>(-1L),
+                           const_cast<char*>(post_data.data()), static_cast<DWORD>(post_data.size()),
+                           static_cast<DWORD>(post_data.size()), 0) &&
+        WinHttpReceiveResponse(request, nullptr) &&
+        WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                            WINHTTP_HEADER_NAME_BY_INDEX, &status, &size, WINHTTP_NO_HEADER_INDEX) &&
+        status >= 200 && status < 300)
+    {
+      const std::string tmp = out_path + ".part";
+      if (FILE* f = OpenFile(tmp, "wb"))
+      {
+        ok = true;
+        std::vector<char> buf(65536);
+        DWORD got = 0;
+        while (WinHttpReadData(request, buf.data(), static_cast<DWORD>(buf.size()), &got) && got > 0)
+          if (std::fwrite(buf.data(), 1, got, f) != got)
+            ok = false;
+        std::fclose(f);
+        ok = ok && RenameFile(tmp, out_path);
+        if (!ok)
+          RemoveFile(tmp);
+      }
+    }
+  }
+  if (request)
+    WinHttpCloseHandle(request);
+  if (connect)
+    WinHttpCloseHandle(connect);
+  if (session)
+    WinHttpCloseHandle(session);
+  return ok;
+}
 #else
 void* OpenLibrary(const std::string& path)
 {
@@ -196,6 +259,36 @@ const char* NullRedirect()
 std::string OpenFileDialog(const std::string&, const std::string&)
 {
   return {};
+}
+
+bool HttpFetch(const std::string& url, const std::string& post_data, const std::string& user_agent,
+               const std::string& out_path)
+{
+  const std::string tmp = out_path + ".part";
+  // La URL y los datos (que pueden llevar la contraseña) van por la entrada estándar, no en la orden.
+  FILE* p = OpenPipe("curl -sSfL --max-time 60 -K - -o " + QuoteArg(tmp) + " " + NullRedirect(), "w");
+  if (!p)
+    return false;
+  auto esc = [](const std::string& v) {
+    std::string r;
+    for (char c : v)
+    {
+      if (c == '"' || c == '\\')
+        r += '\\';
+      r += c;
+    }
+    return r;
+  };
+  std::fprintf(p, "url = \"%s\"\n", esc(url).c_str());
+  std::fprintf(p, "user-agent = \"%s\"\n", esc(user_agent).c_str());
+  if (!post_data.empty())
+    std::fprintf(p, "data = \"%s\"\n", esc(post_data).c_str());
+  if (ClosePipe(p) != 0)
+  {
+    RemoveFile(tmp);
+    return false;
+  }
+  return RenameFile(tmp, out_path);
 }
 #endif
 

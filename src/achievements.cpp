@@ -56,34 +56,7 @@ std::string UrlEncode(const std::string& s)
 // tokens nunca aparezcan en la lista de procesos. Devuelve true si la descarga tuvo éxito.
 bool CurlFetch(const std::string& url, const std::string& post_data, const std::string& out_path)
 {
-  std::string tmp = out_path + ".part";
-  // En Windows 10/11 curl.exe viene con el sistema.
-  const std::string cmd =
-    "curl -sSfL --max-time 60 -K - -o " + Platform::QuoteArg(tmp) + " " + Platform::NullRedirect();
-  FILE* p = Platform::OpenPipe(cmd, "w");
-  if (!p)
-    return false;
-  auto esc = [](const std::string& v) {
-    std::string r;
-    for (char c : v)
-    {
-      if (c == '"' || c == '\\')
-        r += '\\';
-      r += c;
-    }
-    return r;
-  };
-  std::fprintf(p, "url = \"%s\"\n", esc(url).c_str());
-  std::fprintf(p, "user-agent = \"%s\"\n", kUserAgent);
-  if (!post_data.empty())
-    std::fprintf(p, "data = \"%s\"\n", esc(post_data).c_str());
-  const int status = Platform::ClosePipe(p);
-  if (status != 0)
-  {
-    Platform::RemoveFile(tmp);
-    return false;
-  }
-  return Platform::RenameFile(tmp, out_path);
+  return Platform::HttpFetch(url, post_data, kUserAgent, out_path);
 }
 
 uint32_t ReadMemory(uint32_t address, uint8_t* buffer, uint32_t num_bytes, void* ud)

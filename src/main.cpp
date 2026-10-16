@@ -72,6 +72,7 @@ float Smooth(float a, float b, float x)
 // Duraciones de las animaciones de apertura y cierre (segundos).
 constexpr float kIntroLen = 2.5f;
 constexpr float kOutroLen = 1.25f;
+constexpr float kLoadingLen = 1.1f; // duración mínima de la pantalla de carga
 
 std::string BaseName(const std::string& path)
 {
@@ -569,6 +570,11 @@ private:
   void ActivateMenu(int index);
   void ActivatePause(int index);
   void StartGame(bool resume);
+  // JUGAR: comprueba que se puede arrancar y muestra la pantalla de carga; el juego arranca al
+  // terminar (Update), con un mínimo de kLoadingLen segundos y sin aceptar botones mientras tanto.
+  void RequestStart(bool resume);
+  bool CanStart();
+  void RenderLoading(float alpha);
   void StopGame(bool autosave);
   void OptionChange(int row, int dir);
   void OpenOptionPage(int page);
@@ -712,6 +718,11 @@ private:
   EmuInput m_last_input;       // lo último enviado al juego (para la cámara libre)
   bool m_r3_was_down = false;
   bool m_l3_was_down = false;
+  bool m_sticks_combo_latched = false; // L3 + R3 ya usado; no vuelve a contar hasta soltarlos
+  int m_start_pending = -1;  // pantalla de carga: -1 no, 0 partida nueva, 1 continuar
+  float m_loading_t = 0;
+  float m_game_fade = 0;     // 1 → 0: la imagen del juego aparece desde negro
+  bool m_input_gate = false; // el juego no recibe nada hasta soltar los botones usados para entrar
   bool m_mouse_captured = false;       // ratón capturado para la cámara (esquema teclado y ratón)
   float m_look_dx = 0, m_look_dy = 0;  // movimiento del ratón pendiente
   float m_wheel_up_t = 0, m_wheel_down_t = 0; // pulsación breve de L2/R2 con la rueda
@@ -732,6 +743,7 @@ private:
 
   Rect m_tb_min, m_tb_max, m_tb_close;
   Rect m_tb_lang, m_lang_menu; // botón del idioma y su menú desplegable
+  Rect m_fs_exit;              // en pantalla completa: volver a ventana
   bool m_lang_open = false;
 
   SDL_GameController* m_pad = nullptr;
@@ -940,7 +952,7 @@ void App::ActivateMenu(int index)
       }
       else
       {
-        StartGame(false);
+        RequestStart(false);
       }
       break;
     case 1:
@@ -968,16 +980,15 @@ void App::SetGamePath(const std::string& path)
   m_cfg.Save();
 }
 
-void App::StartGame(bool resume)
+bool App::CanStart()
 {
-  m_modal = Modal::None;
   if (m_cfg.game_path.empty() || !Paths::FileExists(m_cfg.game_path))
   {
     ShowDialog(L("No hay ninguna imagen de disco seleccionada.\n\nCópiala en la carpeta game/ del launcher,\n"
                  "elígela en OPCIONES · ISO y BIOS,\no arrástrala sobre la ventana.",
                  "No disc image selected.\n\nCopy it into the launcher's game/ folder,\n"
                  "choose it in OPTIONS · ISO & BIOS,\nor drag it onto the window."));
-    return;
+    return false;
   }
 
   // Hardcore: sólo con la BIOS original de la consola y siempre desde el arranque.
@@ -987,19 +998,37 @@ void App::StartGame(bool resume)
                  "ISO y BIOS, o desactiva allí el modo hardcore.",
                  "Hardcore mode only works with your PlayStation's original BIOS.\n\nLoad it in OPTIONS · "
                  "ISO & BIOS, or turn hardcore mode off there."));
-    return;
+    return false;
   }
+  return true;
+}
+
+void App::RequestStart(bool resume)
+{
+  m_modal = Modal::None;
+  if (!CanStart())
+    return;
+  m_audio.Play(Sfx::Start);
+  m_start_pending = resume ? 1 : 0;
+  m_loading_t = 0;
+}
+
+void App::StartGame(bool resume)
+{
+  m_modal = Modal::None;
+  if (!CanStart())
+    return;
   m_hardcore_session = m_cfg.hardcore;
   if (m_hardcore_session)
     resume = false;
 
-  // Un frame en negro mientras arranca el núcleo.
+  // La pantalla de carga se queda a la vista mientras arranca el núcleo.
   m_r.BeginFrame(m_w, m_h, m_time);
   glClearColor(0, 0, 0, 1);
   glClear(GL_COLOR_BUFFER_BIT);
+  RenderLoading(1.0f);
   SDL_GL_SwapWindow(m_window);
 
-  m_audio.Play(Sfx::Start);
   std::vector<std::string> cheats = m_hardcore_session ? std::vector<std::string>{} : ActiveCheatCodes();
   m_cheats_active = !cheats.empty();
   // Bloqueo con la pose de pie con el arma fuera (movimiento 360°); no es un truco: no pausa logros.
@@ -1111,6 +1140,8 @@ void App::StartGame(bool resume)
   m_paused = false;
   m_pause_sel = 0;
   m_mouse_idle = 0;
+  m_game_fade = 1.0f;
+  m_input_gate = true;
 }
 
 void App::StopGame(bool autosave)
@@ -1569,9 +1600,9 @@ void App::Accept()
   if (m_modal == Modal::PlayChoice)
   {
     if (m_choice_sel == 0)
-      StartGame(true);
+      RequestStart(true);
     else if (m_choice_sel == 1)
-      StartGame(false);
+      RequestStart(false);
     else
     {
       m_audio.Play(Sfx::Cancel);
@@ -1799,6 +1830,20 @@ EmuInput App::GatherGameInput()
     in.analog[1][0] = static_cast<int16_t>(m_test_rstick[0] * 32767);
     in.analog[1][1] = static_cast<int16_t>(m_test_rstick[1] * 32767);
   }
+  // Tras arrancar, el juego no recibe nada hasta que se sueltan todos los botones y joysticks (así
+  // la pulsación de JUGAR no llega al juego).
+  if (m_input_gate)
+  {
+    const bool idle = in.buttons == 0 && std::abs(in.analog[0][0]) < 8000 && std::abs(in.analog[0][1]) < 8000 &&
+                      std::abs(in.analog[1][0]) < 8000 && std::abs(in.analog[1][1]) < 8000;
+    if (!idle)
+    {
+      m_move[0] = m_move[1] = 0;
+      m_last_input = EmuInput{};
+      return EmuInput{};
+    }
+    m_input_gate = false;
+  }
   // Controles 360°: la dirección del joystick izquierdo (o de la cruceta / teclas de dirección) es
   // relativa a la cámara; el personaje se orienta hacia ella (FreeCamera::Steer) y aquí sólo se
   // pide «adelante». Fuera de los modos de movimiento normales llegan los controles originales.
@@ -1840,6 +1885,9 @@ void App::HandleEvent(const SDL_Event& e)
       m_running = false;
     return;
   }
+  // Pantalla de carga: no se acepta ninguna pulsación (sólo cerrar la ventana).
+  if (m_start_pending >= 0 && e.type != SDL_QUIT && e.type != SDL_WINDOWEVENT)
+    return;
   // La apertura se salta con cualquier tecla, botón o clic.
   if (IntroActive() &&
       (e.type == SDL_KEYDOWN || e.type == SDL_CONTROLLERBUTTONDOWN || e.type == SDL_MOUSEBUTTONDOWN))
@@ -2050,6 +2098,11 @@ void App::HandleEvent(const SDL_Event& e)
       break;
     }
 
+    case SDL_CONTROLLERBUTTONUP:
+      if (e.cbutton.button == SDL_CONTROLLER_BUTTON_LEFTSTICK || e.cbutton.button == SDL_CONTROLLER_BUTTON_RIGHTSTICK)
+        m_sticks_combo_latched = false;
+      break;
+
     case SDL_CONTROLLERAXISMOTION:
       if (std::abs(e.caxis.value) > 16000)
         m_last_device = PadStyle();
@@ -2059,16 +2112,26 @@ void App::HandleEvent(const SDL_Event& e)
     {
       m_last_device = PadStyle();
       const auto btn = e.cbutton.button;
-      // L3 + R3 a la vez (o el botón central) abre y cierra la pausa durante el juego.
+      // L3 + R3 a la vez (o el botón central) abre y cierra la pausa durante el juego. Se mira el mando
+      // que envió la pulsación (puede haber varios conectados) y la combinación cuenta una sola vez
+      // hasta soltar los dos: si llegan en el mismo frame, cada uno ve al otro ya pulsado y, sin esto,
+      // la pausa se abría y se volvía a cerrar al instante.
+      SDL_GameController* from = SDL_GameControllerFromInstanceID(e.cbutton.which);
+      if (!from)
+        from = m_pad;
       const bool sticks_combo =
-        m_pad &&
-        ((btn == SDL_CONTROLLER_BUTTON_LEFTSTICK && SDL_GameControllerGetButton(m_pad, SDL_CONTROLLER_BUTTON_RIGHTSTICK)) ||
-         (btn == SDL_CONTROLLER_BUTTON_RIGHTSTICK && SDL_GameControllerGetButton(m_pad, SDL_CONTROLLER_BUTTON_LEFTSTICK)));
+        from && !m_sticks_combo_latched &&
+        ((btn == SDL_CONTROLLER_BUTTON_LEFTSTICK && SDL_GameControllerGetButton(from, SDL_CONTROLLER_BUTTON_RIGHTSTICK)) ||
+         (btn == SDL_CONTROLLER_BUTTON_RIGHTSTICK && SDL_GameControllerGetButton(from, SDL_CONTROLLER_BUTTON_LEFTSTICK)));
+      if (sticks_combo)
+        m_sticks_combo_latched = true;
       if (m_screen == Screen::Game && m_modal == Modal::None && (sticks_combo || btn == SDL_CONTROLLER_BUTTON_GUIDE))
       {
         Back();
         break;
       }
+      if (m_sticks_combo_latched && (btn == SDL_CONTROLLER_BUTTON_LEFTSTICK || btn == SDL_CONTROLLER_BUTTON_RIGHTSTICK))
+        break; // la segunda mitad de la combinación no hace nada más
       if (m_screen == Screen::Game && !m_paused && m_modal == Modal::None)
         break;
       switch (btn)
@@ -2349,6 +2412,18 @@ void App::Update(float dt)
     m_credits_scroll += (m_credits_target - m_credits_scroll) * std::min(1.0f, dt * 8.0f);
   }
 
+  if (m_start_pending >= 0)
+  {
+    m_loading_t += dt;
+    if (m_loading_t >= kLoadingLen)
+    {
+      const bool resume = m_start_pending == 1;
+      m_start_pending = -1;
+      StartGame(resume);
+    }
+  }
+  m_game_fade = std::max(0.0f, m_game_fade - dt / 0.5f);
+
   if (m_screen == Screen::Game)
   {
     m_mouse_idle += dt;
@@ -2427,6 +2502,8 @@ void App::Render()
     RenderLanguage();
     RenderTransition();
   }
+  if (m_start_pending >= 0)
+    RenderLoading(Smooth(0.0f, 0.35f, m_loading_t));
   if (m_modal == Modal::Dialog)
     RenderDialog();
   RenderToast();
@@ -2748,12 +2825,8 @@ void App::RenderTitleBar()
   }
   Hot(m_tb_close, 5, 0, [this](float, float) { RequestQuit(); });
   Hot(m_tb_min, 5, 1, [this](float, float) { SDL_MinimizeWindow(m_window); });
-  Hot(m_tb_max, 5, 2, [this](float, float) {
-    if (SDL_GetWindowFlags(m_window) & SDL_WINDOW_MAXIMIZED)
-      SDL_RestoreWindow(m_window);
-    else
-      SDL_MaximizeWindow(m_window);
-  });
+  // □: pantalla completa (como F11). Maximizar una ventana sin bordes no funcionaba bien en Windows.
+  Hot(m_tb_max, 5, 2, [this](float, float) { ToggleFullscreen(); });
 }
 
 void App::SetLanguage(Lang lang)
@@ -2822,11 +2895,21 @@ void App::RenderLanguage()
   const float bw = IS(58), bh = IS(kTitleH);
   if (fullscreen)
   {
-    m_tb_lang = {m_w - bw - IS(16), IS(12), bw, bh};
-    m_r.Rect(m_tb_lang.x, m_tb_lang.y, m_tb_lang.w, m_tb_lang.h, UiMode::Solid, {0.03f, 0.025f, 0.025f, 0.8f * alpha});
+    // A la derecha, el botón para volver a ventana; a su izquierda, la bandera.
+    m_fs_exit = {m_w - bw - IS(16), IS(12), bw, bh};
+    m_tb_lang = {m_fs_exit.x - bw - IS(6), IS(12), bw, bh};
+    for (const Rect* r : {&m_fs_exit, &m_tb_lang})
+      m_r.Rect(r->x, r->y, r->w, r->h, UiMode::Solid, {0.03f, 0.025f, 0.025f, 0.8f * alpha});
+    if (m_fs_exit.Contains(m_mouse_px, m_mouse_py))
+      m_r.Rect(m_fs_exit.x, m_fs_exit.y, m_fs_exit.w, m_fs_exit.h, UiMode::Solid, {1, 1, 1, 0.1f * alpha});
+    const float is = IS(14);
+    m_r.DrawIcon(Icon::Maximize, m_fs_exit.x + (bw - is) / 2, m_fs_exit.y + (bh - is) / 2, is,
+                 {0.88f, 0.86f, 0.83f, alpha});
+    Hot(m_fs_exit, 5, 4, [this](float, float) { ToggleFullscreen(); });
   }
   else
   {
+    m_fs_exit = {};
     m_tb_lang = {m_tb_min.x - bw, 0, bw, bh};
   }
   const Rect& b = m_tb_lang;
@@ -2867,6 +2950,24 @@ void App::RenderLanguage()
       m_lang_open = false;
     });
   }
+}
+
+// Pantalla de carga: fundido a negro con el kanji en su ensō, que late, y «Cargando…».
+void App::RenderLoading(float alpha)
+{
+  if (alpha <= 0.001f)
+    return;
+  m_r.Rect(0, 0, static_cast<float>(m_w), static_cast<float>(m_h), UiMode::Solid, {0, 0, 0, alpha});
+  const float cx = m_w / 2.0f, cy = m_h / 2.0f - IS(30);
+  const float size = std::min(m_w, m_h) * 0.18f * (1.0f + 0.03f * std::sin(m_time * 4.0f));
+  m_r.Rect(cx - size * 0.95f, cy - size * 0.95f, size * 1.9f, size * 1.9f, UiMode::Enso,
+           {0.7f, 0.05f, 0.04f, 0.85f * alpha});
+  m_r.TextCentered(m_r.kanji, "忍", cx, cy, size * 1.45f, {0.9f, 0.12f, 0.08f, alpha});
+  const int dots = static_cast<int>(m_time * 3.0f) % 4;
+  const std::string text = std::string(L("Cargando", "Loading")) + std::string(dots, '.');
+  const float fs = IS(30);
+  const float w = m_r.TextWidth(m_r.ui, std::string(L("Cargando", "Loading")) + "...", fs);
+  m_r.Text(m_r.ui, text, cx - w / 2, cy + size * 1.15f, fs, {0.85f, 0.82f, 0.78f, alpha});
 }
 
 // Capa de transición: kanji en un ensō y barrido de tinta (apertura y cierre).
@@ -3873,6 +3974,8 @@ void App::RenderGame()
     const float bob = h * 0.008f * std::sin(m_time * 3.0f);
     m_r.DrawIcon(Icon::LockMark, mx - size / 2, my - size + bob, size, {0.86f, 0.1f, 0.08f, 0.9f * m_mark_alpha});
   }
+  if (m_game_fade > 0)
+    m_r.Rect(0, 0, static_cast<float>(m_w), static_cast<float>(m_h), UiMode::Solid, {0, 0, 0, m_game_fade});
 }
 
 void App::RenderPause()
@@ -4222,6 +4325,11 @@ int App::Run(int argc, char** argv)
       }
       if (screenshot_screen == "achievements") m_screen = Screen::Achievements;
       m_lang_open = std::getenv("TENCHU_TEST_LANGMENU") != nullptr;
+      if (const char* lt = std::getenv("TENCHU_TEST_LOADING")) // pantalla de carga en el segundo indicado
+      {
+        m_start_pending = 0;
+        m_loading_t = static_cast<float>(std::atof(lt));
+      }
       if (screenshot_screen == "choice") m_modal = Modal::PlayChoice;
       if (screenshot_screen == "dialog") ShowDialog("Ejemplo de diálogo.\nSegunda línea de texto.");
       if (const char* st = std::getenv("TENCHU_TEST_STYLE"))
